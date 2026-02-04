@@ -66,7 +66,7 @@ export class PbcService {
         // 非总经理的业务目标必须关联上级的业务目标
         if (!createPbcDto.supervisor_goal_id) {
           console.log('❌ 缺少上级目标关联');
-          // throw new BadRequestException('业务目标必须关联上级的业务目标');
+          throw new BadRequestException('业务目标必须关联上级的业务目标');
         }
 
         console.log('   supervisor_goal_id:', createPbcDto.supervisor_goal_id);
@@ -87,7 +87,7 @@ export class PbcService {
 
           if (!supervisorGoal) {
             console.log('❌ 关联的上级目标不存在或不是有效的业务目标');
-            // throw new BadRequestException('关联的上级目标不存在或不是有效的业务目标');
+            throw new BadRequestException('关联的上级目标不存在或不是有效的业务目标');
           }
         }
         console.log('✓ 上级目标验证通过');

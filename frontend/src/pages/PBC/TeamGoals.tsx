@@ -16,6 +16,7 @@ import {
 import { EyeOutlined, EditOutlined } from '@ant-design/icons';
 import { pbcApi, PbcGoal, PbcPeriod, PbcStatus } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
+import { sortGoals } from '../../utils/goalSort';
 
 const { TextArea } = Input;
 
@@ -52,7 +53,8 @@ const TeamGoals: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<number | undefined>();
   const [searchName, setSearchName] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<string | undefined>();
-  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [viewDetailGroup, setViewDetailGroup] = useState<UserPeriodGroup | null>(null);
 
   // 评价相关状态
   const [evaluationModalVisible, setEvaluationModalVisible] = useState(false);
@@ -281,14 +283,11 @@ const TeamGoals: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      fixed: 'right',
+      width: 200,
       render: (_, record) => {
         // 检查是否已提交自评
         const hasSelfEvaluation = record.goals.some((g: any) => g.self_score);
-        
-        if (!hasSelfEvaluation) {
-          return <span style={{ color: '#999' }}>待员工自评</span>;
-        }
         
         return (
           <Space>
@@ -296,10 +295,25 @@ const TeamGoals: React.FC = () => {
               type="link"
               size="small"
               icon={<EyeOutlined />}
-              onClick={() => handleViewEvaluation(record.userId, record.periodId)}
+              onClick={() => {
+                setViewDetailGroup(record);
+                setDetailModalVisible(true);
+              }}
             >
-              查看自评
+              查看目标
             </Button>
+            {hasSelfEvaluation ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => handleViewEvaluation(record.userId, record.periodId)}
+              >
+                查看自评
+              </Button>
+            ) : (
+              <span style={{ color: '#999', fontSize: 12 }}>待自评</span>
+            )}
           </Space>
         );
       },
@@ -449,21 +463,102 @@ const TeamGoals: React.FC = () => {
         rowKey={(record) => `${record.userId}_${record.periodId}`}
         loading={loading}
         pagination={{ pageSize: 10 }}
-        expandable={{
-          expandedRowKeys,
-          onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as string[]),
-          expandedRowRender: (record) => (
-            <Table
-              columns={goalDetailColumns}
-              dataSource={record.goals}
-              rowKey="goal_id"
-              pagination={false}
-              size="small"
-            />
-          ),
-        }}
+        scroll={{ x: 'max-content' }}
       />
     </Card>
+
+      {/* 查看目标详情Modal */}
+      <Modal
+        title={`${viewDetailGroup?.userName} - ${viewDetailGroup?.periodName} - 目标详情`}
+        open={detailModalVisible}
+        onCancel={() => {
+          setDetailModalVisible(false);
+          setViewDetailGroup(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            关闭
+          </Button>,
+        ]}
+        width={900}
+        bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
+      >
+        {viewDetailGroup && (
+          <div>
+            <div style={{ marginBottom: 16, fontSize: 14, color: '#666', textAlign: 'center' }}>
+              <span>目标数量：{viewDetailGroup.goals.length} 个</span>
+              <span style={{ marginLeft: 24 }}>
+                权重总和：
+                <span style={{ 
+                  color: Math.abs(viewDetailGroup.totalWeight - 100) > 0.01 ? '#ff4d4f' : '#52c41a',
+                  fontWeight: 'bold'
+                }}>
+                  {viewDetailGroup.totalWeight}%
+                </span>
+              </span>
+            </div>
+            
+            {sortGoals(viewDetailGroup.goals).map((goal, index) => (
+              <Card
+                key={goal.goal_id}
+                size="small"
+                style={{ marginBottom: 16 }}
+                title={
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <span>
+                      <Tag color="blue">目标 {index + 1}</Tag>
+                      <span style={{ marginLeft: 8 }}>{goal.goal_name}</span>
+                    </span>
+                    <Space wrap>
+                      <Tag color="processing">{goalTypeMap[goal.goal_type] || goal.goal_type}</Tag>
+                      <Tag color={statusMap[goal.status].color}>{statusMap[goal.status].text}</Tag>
+                      <Tag color="orange">权重 {goal.goal_weight}%</Tag>
+                    </Space>
+                  </div>
+                }
+              >
+                <Descriptions column={1} size="small" bordered>
+                  <Descriptions.Item label="目标描述">
+                    {goal.goal_description}
+                  </Descriptions.Item>
+                  
+                  {goal.goal_type !== 'skill' && goal.measures && (
+                    <Descriptions.Item label="实现举措">
+                      {goal.measures}
+                    </Descriptions.Item>
+                  )}
+                  
+                  {goal.goal_type === 'business' && (
+                    <>
+                      <Descriptions.Item label="不可接受标准">
+                        <span style={{ color: '#ff4d4f' }}>
+                          {goal.unacceptable || '-'}
+                        </span>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="达标标准">
+                        <span style={{ color: '#1890ff' }}>
+                          {goal.acceptable || '-'}
+                        </span>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="卓越标准">
+                        <span style={{ color: '#52c41a' }}>
+                          {goal.excellent || '-'}
+                        </span>
+                      </Descriptions.Item>
+                    </>
+                  )}
+                  
+                  {goal.created_at && (
+                    <Descriptions.Item label="创建时间">
+                      {new Date(goal.created_at).toLocaleString('zh-CN')}
+                    </Descriptions.Item>
+                  )}
+                </Descriptions>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       {/* 查看自评模态框 */}
       <Modal
@@ -534,7 +629,7 @@ const TeamGoals: React.FC = () => {
             {/* 各目标详细评价 */}
             <Card title="各目标评价详情" size="small">
               <Table
-                dataSource={currentEvaluationData.goals}
+                dataSource={sortGoals(currentEvaluationData.goals)}
                 rowKey="goal_id"
                 pagination={false}
                 size="small"

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Button, Tag, Tabs, Space, message } from 'antd';
+import { Card, Table, Button, Tag, Tabs, Space, message, Modal, Descriptions, Divider } from 'antd';
 import { CheckOutlined, CloseOutlined, EyeOutlined } from '@ant-design/icons';
 import { reviewsApi, pbcApi, PbcGoal, PbcStatus } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
 import ReviewModal from './ReviewModal';
+import { sortGoals } from '../../utils/goalSort';
 
 const statusMap: Record<PbcStatus, { color: string; text: string }> = {
   draft: { color: 'default', text: '草稿' },
@@ -37,6 +38,8 @@ const ReviewList: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [currentGroup, setCurrentGroup] = useState<UserGoalGroup | null>(null);
   const [modalAction, setModalAction] = useState<'approve' | 'reject'>('approve');
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [viewDetailGroup, setViewDetailGroup] = useState<UserGoalGroup | null>(null);
 
   const fetchPendingData = async () => {
     setLoading(true);
@@ -160,9 +163,20 @@ const ReviewList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 260,
+      fixed: 'right',
+      width: 280,
       render: (_, record) => (
         <Space>
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => {
+              setViewDetailGroup(record);
+              setDetailModalVisible(true);
+            }}
+          >
+            查看
+          </Button>
           <Button
             type="primary"
             size="small"
@@ -334,17 +348,7 @@ const ReviewList: React.FC = () => {
           rowKey={(record) => `${record.userId}_${record.periodId || 'no_period'}`}
           loading={loading}
           pagination={{ pageSize: 10 }}
-          expandable={{
-            expandedRowRender: (record) => (
-              <Table
-                columns={goalDetailColumns}
-                dataSource={record.goals}
-                rowKey="goal_id"
-                pagination={false}
-                size="small"
-              />
-            ),
-          }}
+          scroll={{ x: 'max-content' }}
         />
       ),
     },
@@ -377,6 +381,92 @@ const ReviewList: React.FC = () => {
             : undefined
         }
       />
+
+      {/* 查看目标详情Modal */}
+      <Modal
+        title={`${viewDetailGroup?.userName} - ${viewDetailGroup?.periodName} - 目标详情`}
+        open={detailModalVisible}
+        onCancel={() => {
+          setDetailModalVisible(false);
+          setViewDetailGroup(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            关闭
+          </Button>,
+        ]}
+        width={900}
+        bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
+      >
+        {viewDetailGroup && (
+          <div>
+            <div style={{ marginBottom: 16, fontSize: 14, color: '#666', textAlign: 'center' }}>
+              <span>目标数量：{viewDetailGroup.goals.length} 个</span>
+              <span style={{ marginLeft: 24 }}>
+                权重总和：
+                <span style={{ 
+                  color: Math.abs(viewDetailGroup.totalWeight - 100) > 0.01 ? '#ff4d4f' : '#52c41a',
+                  fontWeight: 'bold'
+                }}>
+                  {viewDetailGroup.totalWeight}%
+                </span>
+              </span>
+            </div>
+            
+            {sortGoals(viewDetailGroup.goals).map((goal, index) => (
+              <Card
+                key={goal.goal_id}
+                size="small"
+                style={{ marginBottom: 16 }}
+                title={
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>
+                      <Tag color="blue">目标 {index + 1}</Tag>
+                      <span style={{ marginLeft: 8 }}>{goal.goal_name}</span>
+                    </span>
+                    <Space>
+                      <Tag color="processing">{goalTypeMap[goal.goal_type] || goal.goal_type}</Tag>
+                      <Tag color="orange">权重 {goal.goal_weight}%</Tag>
+                    </Space>
+                  </div>
+                }
+              >
+                <Descriptions column={1} size="small" bordered>
+                  <Descriptions.Item label="目标描述">
+                    {goal.goal_description}
+                  </Descriptions.Item>
+                  
+                  {goal.goal_type !== 'skill' && goal.measures && (
+                    <Descriptions.Item label="实现举措">
+                      {goal.measures}
+                    </Descriptions.Item>
+                  )}
+                  
+                  {goal.goal_type === 'business' && (
+                    <>
+                      <Descriptions.Item label="不可接受标准">
+                        <span style={{ color: '#ff4d4f' }}>
+                          {goal.unacceptable || '-'}
+                        </span>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="达标标准">
+                        <span style={{ color: '#1890ff' }}>
+                          {goal.acceptable || '-'}
+                        </span>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="卓越标准">
+                        <span style={{ color: '#52c41a' }}>
+                          {goal.excellent || '-'}
+                        </span>
+                      </Descriptions.Item>
+                    </>
+                  )}
+                </Descriptions>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Modal>
     </Card>
   );
 };

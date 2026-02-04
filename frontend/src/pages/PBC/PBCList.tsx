@@ -29,6 +29,7 @@ import {
 import { pbcApi, PbcGoal, PbcPeriod, PbcStatus } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../store/authStore';
+import { sortGoals } from '../../utils/goalSort';
 
 const { TextArea } = Input;
 
@@ -503,7 +504,7 @@ const PBCList: React.FC = () => {
       >
         <Table
           columns={columns}
-          dataSource={data}
+          dataSource={sortGoals(data)}
           rowKey="goal_id"
           loading={loading}
           pagination={{ pageSize: 10 }}
@@ -675,7 +676,7 @@ const PBCList: React.FC = () => {
             {/* 各目标详细评价 */}
             <Card title="各目标评价详情" size="small">
               <Table
-                dataSource={feedbackData.goals}
+                dataSource={sortGoals(feedbackData.goals)}
                 rowKey="goal_id"
                 pagination={false}
                 size="small"
