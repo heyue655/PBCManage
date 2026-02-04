@@ -1,0 +1,72 @@
+// 这是 Departments Service 的 Prisma 版本示例
+// 复制此文件内容替换 departments.service.ts
+
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateDepartmentDto, UpdateDepartmentDto } from './dto';
+
+@Injectable()
+export class DepartmentsService {
+  constructor(private prisma: PrismaService) {}
+
+  async findAll() {
+    return this.prisma.department.findMany({
+      include: { parent: true },
+    });
+  }
+
+  async findOne(id: number) {
+    const department = await this.prisma.department.findUnique({
+      where: { department_id: id },
+      include: {
+        parent: true,
+        children: true,
+      },
+    });
+
+    if (!department) {
+      throw new NotFoundException('部门不存在');
+    }
+
+    return department;
+  }
+
+  async getTree() {
+    const allDepartments = await this.prisma.department.findMany();
+    return this.buildTree(allDepartments);
+  }
+
+  private buildTree(departments: any[], parentId: number | null = null): any[] {
+    return departments
+      .filter(dept => dept.parent_id === parentId)
+      .map(dept => ({
+        ...dept,
+        children: this.buildTree(departments, dept.department_id),
+      }));
+  }
+
+  async create(createDepartmentDto: CreateDepartmentDto) {
+    return this.prisma.department.create({
+      data: createDepartmentDto,
+    });
+  }
+
+  async update(id: number, updateDepartmentDto: UpdateDepartmentDto) {
+    await this.findOne(id); // 检查是否存在
+    
+    return this.prisma.department.update({
+      where: { department_id: id },
+      data: updateDepartmentDto,
+    });
+  }
+
+  async delete(id: number) {
+    await this.findOne(id); // 检查是否存在
+    
+    await this.prisma.department.delete({
+      where: { department_id: id },
+    });
+    
+    return { message: '删除成功' };
+  }
+}

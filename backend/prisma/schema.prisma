@@ -1,0 +1,194 @@
+// Prisma Schema for PBC Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Department {
+  department_id   Int          @id @default(autoincrement())
+  department_name String       @db.VarChar(255)
+  parent_id       Int?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  
+  parent          Department?  @relation("DepartmentHierarchy", fields: [parent_id], references: [department_id], onDelete: SetNull)
+  children        Department[] @relation("DepartmentHierarchy")
+  users           User[]
+
+  @@map("departments")
+}
+
+model User {
+  user_id       Int       @id @default(autoincrement())
+  username      String    @unique @db.VarChar(255)
+  password      String    @db.VarChar(255)
+  real_name     String    @db.VarChar(255)
+  job_title     String    @db.VarChar(255)
+  department_id Int?
+  supervisor_id Int?
+  role          UserRole  @default(employee)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  
+  department    Department?  @relation(fields: [department_id], references: [department_id], onDelete: SetNull)
+  supervisor    User?        @relation("UserSupervisor", fields: [supervisor_id], references: [user_id], onDelete: SetNull)
+  subordinates  User[]       @relation("UserSupervisor")
+  
+  pbcGoals      PbcGoal[]
+  approvals     PbcApproval[]
+  evaluations   PbcEvaluation[]
+  loginLogs     LoginLog[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  employee
+  assistant
+  manager
+  gm
+
+  @@map("role")
+}
+
+model PbcPeriod {
+  period_id  Int          @id @default(autoincrement())
+  year       Int
+  quarter    Int
+  start_date DateTime     @db.Date
+  end_date   DateTime     @db.Date
+  status     PeriodStatus @default(active)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  
+  pbcGoals    PbcGoal[]
+  evaluations PbcEvaluation[]
+
+  @@unique([year, quarter])
+  @@map("pbc_periods")
+}
+
+enum PeriodStatus {
+  active
+  closed
+
+  @@map("period_status")
+}
+
+model PbcGoal {
+  goal_id            Int       @id @default(autoincrement())
+  user_id            Int
+  period_id          Int?
+  goal_type          GoalType
+  goal_name          String    @db.VarChar(255)
+  goal_description   String    @db.Text
+  goal_weight        Decimal   @db.Decimal(5, 2)
+  parent_goal_id     Int?
+  supervisor_goal_id Int?
+  measures           String?   @db.Text
+  unacceptable       String?   @db.Text
+  acceptable         String?   @db.Text
+  excellent          String?   @db.Text
+  completion_time    DateTime? @db.Date
+  status             PbcStatus @default(draft)
+  self_score         Decimal?  @db.Decimal(5, 2)
+  self_comment       String?   @db.Text
+  supervisor_score   Decimal?  @db.Decimal(5, 2)
+  supervisor_comment String?   @db.Text
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  
+  user           User         @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  period         PbcPeriod?   @relation(fields: [period_id], references: [period_id], onDelete: SetNull)
+  parentGoal     PbcGoal?     @relation("GoalHierarchy", fields: [parent_goal_id], references: [goal_id], onDelete: Cascade)
+  subGoals       PbcGoal[]    @relation("GoalHierarchy")
+  supervisorGoal PbcGoal?     @relation("SupervisorGoal", fields: [supervisor_goal_id], references: [goal_id], onDelete: SetNull)
+  linkedGoals    PbcGoal[]    @relation("SupervisorGoal")
+  
+  approvals      PbcApproval[]
+
+  @@index([user_id])
+  @@index([period_id])
+  @@index([status])
+  @@map("pbc_goals")
+}
+
+enum GoalType {
+  business
+  skill
+  team
+
+  @@map("goal_type")
+}
+
+enum PbcStatus {
+  draft
+  submitted
+  approved
+  rejected
+  archived
+
+  @@map("pbc_status")
+}
+
+model PbcApproval {
+  approval_id Int            @id @default(autoincrement())
+  goal_id     Int
+  reviewer_id Int
+  action      ApprovalAction
+  comments    String?        @db.Text
+  created_at  DateTime       @default(now())
+  
+  goal     PbcGoal @relation(fields: [goal_id], references: [goal_id], onDelete: Cascade)
+  reviewer User    @relation(fields: [reviewer_id], references: [user_id], onDelete: Cascade)
+
+  @@index([goal_id])
+  @@map("pbc_approvals")
+}
+
+enum ApprovalAction {
+  submit
+  approve
+  reject
+
+  @@map("approval_action")
+}
+
+model PbcEvaluation {
+  evaluation_id            Int      @id @default(autoincrement())
+  user_id                  Int
+  period_id                Int
+  self_overall_comment     String?  @db.Text
+  self_submitted_at        DateTime?
+  supervisor_overall_comment String? @db.Text
+  supervisor_submitted_at  DateTime?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+  
+  user   User       @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  period PbcPeriod  @relation(fields: [period_id], references: [period_id], onDelete: Cascade)
+
+  @@unique([user_id, period_id])
+  @@index([user_id])
+  @@index([period_id])
+  @@map("pbc_evaluations")
+}
+
+model LoginLog {
+  log_id      Int       @id @default(autoincrement())
+  user_id     Int
+  login_time  DateTime
+  logout_time DateTime?
+  ip_address  String?   @db.VarChar(255)
+  created_at  DateTime  @default(now())
+  
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("login_logs")
+}
