@@ -269,6 +269,13 @@ const UserManage: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
+          <Form.Item
+            name="dingtalk_userid"
+            label="钉钉用户ID"
+            tooltip="用于发送钉钉工作通知，可选填"
+          >
+            <Input placeholder="请输入钉钉用户ID（可选）" />
+          </Form.Item>
         </Form>
       </Modal>
 

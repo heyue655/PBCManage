@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveDto, RejectDto, SupervisorEvaluateDto } from './dto';
+import { DingtalkService } from '../dingtalk/dingtalk.service';
 
 @Injectable()
 export class ReviewsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private dingtalkService: DingtalkService,
+  ) {}
 
   // 获取待审核列表
   async getPendingReviews(supervisorId: number) {
@@ -98,6 +102,24 @@ export class ReviewsService {
       });
     }
 
+    // 发送钉钉通知给员工
+    try {
+      if (sampleGoal.user.dingtalk_userid) {
+        const periodName = sampleGoal.period 
+          ? `${sampleGoal.period.year}年第${sampleGoal.period.quarter}季度` 
+          : '当前周期';
+
+        await this.dingtalkService.sendApproveNotification(
+          sampleGoal.user.dingtalk_userid,
+          periodName,
+          allGoals.length,
+        );
+      }
+    } catch (error) {
+      console.error('发送钉钉通知失败:', error);
+      // 通知失败不影响主流程
+    }
+
     return {
       message: `成功通过 ${allGoals.length} 个目标`,
       count: allGoals.length,
@@ -172,6 +194,25 @@ export class ReviewsService {
           comments: rejectDto.reason,
         },
       });
+    }
+
+    // 发送钉钉通知给员工
+    try {
+      if (sampleGoal.user.dingtalk_userid) {
+        const periodName = sampleGoal.period 
+          ? `${sampleGoal.period.year}年第${sampleGoal.period.quarter}季度` 
+          : '当前周期';
+
+        await this.dingtalkService.sendRejectNotification(
+          sampleGoal.user.dingtalk_userid,
+          periodName,
+          allGoals.length,
+          rejectDto.reason,
+        );
+      }
+    } catch (error) {
+      console.error('发送钉钉通知失败:', error);
+      // 通知失败不影响主流程
     }
 
     return {

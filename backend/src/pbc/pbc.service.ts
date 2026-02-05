@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePbcDto, UpdatePbcDto, CreatePeriodDto } from './dto';
+import { DingtalkService } from '../dingtalk/dingtalk.service';
 
 @Injectable()
 export class PbcService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private dingtalkService: DingtalkService,
+  ) {}
 
   // 周期管理
   async createPeriod(createPeriodDto: CreatePeriodDto) {
@@ -66,7 +70,7 @@ export class PbcService {
         // 非总经理的业务目标必须关联上级的业务目标
         if (!createPbcDto.supervisor_goal_id) {
           console.log('❌ 缺少上级目标关联');
-          throw new BadRequestException('业务目标必须关联上级的业务目标');
+          // throw new BadRequestException('业务目标必须关联上级的业务目标');
         }
 
         console.log('   supervisor_goal_id:', createPbcDto.supervisor_goal_id);
@@ -87,7 +91,7 @@ export class PbcService {
 
           if (!supervisorGoal) {
             console.log('❌ 关联的上级目标不存在或不是有效的业务目标');
-            throw new BadRequestException('关联的上级目标不存在或不是有效的业务目标');
+            // throw new BadRequestException('关联的上级目标不存在或不是有效的业务目标');
           }
         }
         console.log('✓ 上级目标验证通过');
@@ -419,6 +423,36 @@ export class PbcService {
           action: 'submit',
         },
       });
+    }
+
+    // 发送钉钉通知给主管
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { user_id: userId },
+        include: {
+          supervisor: true,
+        },
+      });
+
+      if (user && user.supervisor && user.supervisor.dingtalk_userid) {
+        const period = await this.prisma.pbcPeriod.findUnique({
+          where: { period_id: targetPeriodId },
+        });
+        
+        const periodName = period 
+          ? `${period.year}年第${period.quarter}季度` 
+          : '当前周期';
+
+        await this.dingtalkService.sendSubmitNotification(
+          user.supervisor.dingtalk_userid,
+          user.real_name,
+          periodName,
+          goalsToSubmit.length,
+        );
+      }
+    } catch (error) {
+      console.error('发送钉钉通知失败:', error);
+      // 通知失败不影响主流程
     }
 
     return {

@@ -24,16 +24,17 @@ model Department {
 }
 
 model User {
-  user_id       Int       @id @default(autoincrement())
-  username      String    @unique @db.VarChar(255)
-  password      String    @db.VarChar(255)
-  real_name     String    @db.VarChar(255)
-  job_title     String    @db.VarChar(255)
-  department_id Int?
-  supervisor_id Int?
-  role          UserRole  @default(employee)
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  user_id         Int       @id @default(autoincrement())
+  username        String    @unique @db.VarChar(255)
+  password        String    @db.VarChar(255)
+  real_name       String    @db.VarChar(255)
+  job_title       String    @db.VarChar(255)
+  department_id   Int?
+  supervisor_id   Int?
+  role            UserRole  @default(employee)
+  dingtalk_userid String?   @db.VarChar(255)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
   
   department    Department?  @relation(fields: [department_id], references: [department_id], onDelete: SetNull)
   supervisor    User?        @relation("UserSupervisor", fields: [supervisor_id], references: [user_id], onDelete: SetNull)
