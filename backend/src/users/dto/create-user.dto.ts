@@ -28,5 +28,9 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsString()
+  organization?: string;
+
+  @IsOptional()
+  @IsString()
   dingtalk_userid?: string;
 }

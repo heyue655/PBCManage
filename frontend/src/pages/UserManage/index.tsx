@@ -148,6 +148,13 @@ const UserManage: React.FC = () => {
       ),
     },
     {
+      title: '所属组织',
+      dataIndex: 'organization',
+      key: 'organization',
+      width: 100,
+      render: (org) => org || '安恒',
+    },
+    {
       title: '直属主管',
       dataIndex: ['supervisor', 'real_name'],
       key: 'supervisor',
@@ -260,6 +267,16 @@ const UserManage: React.FC = () => {
               <Select.Option value="gm">总经理</Select.Option>
             </Select>
           </Form.Item>
+          <Form.Item 
+            name="organization" 
+            label="所属组织"
+            rules={[{ required: true, message: '请选择所属组织' }]}
+          >
+            <Select placeholder="请选择所属组织">
+              <Select.Option value="安恒">安恒</Select.Option>
+              <Select.Option value="中宇华兴">中宇华兴</Select.Option>
+            </Select>
+          </Form.Item>
           <Form.Item name="supervisor_id" label="直属主管">
             <Select placeholder="请选择直属主管" allowClear showSearch optionFilterProp="children">
               {data.map((user) => (
@@ -268,13 +285,6 @@ const UserManage: React.FC = () => {
                 </Select.Option>
               ))}
             </Select>
-          </Form.Item>
-          <Form.Item
-            name="dingtalk_userid"
-            label="钉钉用户ID"
-            tooltip="用于发送钉钉工作通知，可选填"
-          >
-            <Input placeholder="请输入钉钉用户ID（可选）" />
           </Form.Item>
         </Form>
       </Modal>

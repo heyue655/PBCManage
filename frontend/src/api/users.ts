@@ -8,6 +8,7 @@ export interface User {
   role: string;
   department_id?: number;
   supervisor_id?: number;
+  organization?: string;
   dingtalk_userid?: string;
   department?: {
     department_id: number;
@@ -26,6 +27,7 @@ export interface CreateUserParams {
   department_id?: number;
   supervisor_id?: number;
   role?: string;
+  organization?: string;
   dingtalk_userid?: string;
 }
 

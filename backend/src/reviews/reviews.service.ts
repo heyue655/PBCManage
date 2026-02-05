@@ -110,6 +110,7 @@ export class ReviewsService {
           : '当前周期';
 
         await this.dingtalkService.sendApproveNotification(
+          sampleGoal.user.organization || '安恒',
           sampleGoal.user.dingtalk_userid,
           periodName,
           allGoals.length,
@@ -204,6 +205,7 @@ export class ReviewsService {
           : '当前周期';
 
         await this.dingtalkService.sendRejectNotification(
+          sampleGoal.user.organization || '安恒',
           sampleGoal.user.dingtalk_userid,
           periodName,
           allGoals.length,

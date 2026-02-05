@@ -5,6 +5,7 @@ import { UsersModule } from './users/users.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { PbcModule } from './pbc/pbc.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { DingtalkAppModule } from './dingtalk-app/dingtalk-app.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     DepartmentsModule,
     PbcModule,
     ReviewsModule,
+    DingtalkAppModule,
   ],
 })
 export class AppModule {}

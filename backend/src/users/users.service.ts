@@ -2,11 +2,15 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import * as bcrypt from 'bcryptjs';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
+import { DingtalkService } from '../dingtalk/dingtalk.service';
 import { CreateUserDto, UpdateUserDto } from './dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private dingtalkService: DingtalkService,
+  ) {}
 
   async findAll(currentUserId: number, query: { departmentId?: number; role?: string }) {
     // 先获取当前用户信息
@@ -120,9 +124,43 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash('123456', 10);
 
+    // 根据姓名和组织自动查询钉钉userid
+    let dingtalkUserId: string | null = createUserDto.dingtalk_userid || null;
+    console.log('===== 创建用户 - 钉钉userid查询 =====');
+    console.log('传入的dingtalk_userid:', dingtalkUserId);
+    console.log('用户姓名:', createUserDto.real_name);
+    console.log('所属组织:', createUserDto.organization);
+    
+    if (!dingtalkUserId && createUserDto.organization && createUserDto.real_name) {
+      console.log('开始自动查询钉钉userid...');
+      try {
+        const searchResult = await this.dingtalkService.searchUserIdByName(
+          createUserDto.organization,
+          createUserDto.real_name
+        );
+        console.log('查询结果:', searchResult);
+        if (searchResult) {
+          dingtalkUserId = searchResult;
+          console.log('✅ 自动填充钉钉userid:', dingtalkUserId);
+        } else {
+          dingtalkUserId = null;
+          console.log('⚠️ 未找到匹配的钉钉用户，userid为空');
+        }
+      } catch (error) {
+        // 查询失败，userid设为null
+        dingtalkUserId = null;
+        console.error('❌ 查询钉钉userid失败，userid为空:', error.message);
+      }
+    } else {
+      console.log('跳过自动查询（已有userid或缺少必要参数）');
+    }
+    console.log('最终dingtalk_userid:', dingtalkUserId);
+    console.log('=====================================');
+
     const user = await this.prisma.user.create({
       data: {
         ...createUserDto,
+        dingtalk_userid: dingtalkUserId,
         password: hashedPassword,
       },
     });
@@ -155,9 +193,63 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
+    // 如果姓名或组织发生变化，重新查询钉钉userid
+    let shouldUpdateDingtalkUserId = false; // 标记是否需要更新userid字段
+    let dingtalkUserId: string | null = updateUserDto.dingtalk_userid || null;
+    const nameChanged = updateUserDto.real_name && updateUserDto.real_name !== user.real_name;
+    const orgChanged = updateUserDto.organization && updateUserDto.organization !== user.organization;
+    
+    console.log('===== 更新用户 - 钉钉userid查询 =====');
+    console.log('用户ID:', id);
+    console.log('姓名是否变化:', nameChanged, `(${user.real_name} -> ${updateUserDto.real_name})`);
+    console.log('组织是否变化:', orgChanged, `(${user.organization} -> ${updateUserDto.organization})`);
+    console.log('传入的dingtalk_userid:', updateUserDto.dingtalk_userid);
+    console.log('当前数据库中的dingtalk_userid:', user.dingtalk_userid);
+    
+    if ((nameChanged || orgChanged) && !updateUserDto.dingtalk_userid) {
+      const finalOrganization = updateUserDto.organization || user.organization;
+      const finalRealName = updateUserDto.real_name || user.real_name;
+      
+      console.log('姓名或组织发生变化，需要重新查询钉钉userid');
+      console.log('查询参数 - 组织:', finalOrganization, '姓名:', finalRealName);
+      
+      shouldUpdateDingtalkUserId = true; // 标记需要更新
+      
+      try {
+        const searchResult = await this.dingtalkService.searchUserIdByName(
+          finalOrganization,
+          finalRealName
+        );
+        console.log('查询结果:', searchResult);
+        if (searchResult) {
+          dingtalkUserId = searchResult;
+          console.log('✅ 自动填充钉钉userid:', dingtalkUserId);
+        } else {
+          dingtalkUserId = null;
+          console.log('⚠️ 未找到匹配的钉钉用户，将清空userid');
+        }
+      } catch (error) {
+        // 查询失败，清空userid
+        dingtalkUserId = null;
+        console.error('❌ 查询钉钉userid失败，将清空userid:', error.message);
+      }
+    } else {
+      console.log('跳过自动查询（姓名组织未变化或已提供userid）');
+    }
+    console.log('最终dingtalk_userid:', dingtalkUserId);
+    console.log('是否更新userid字段:', shouldUpdateDingtalkUserId);
+    console.log('=====================================');
+
+    const updateData: any = { ...updateUserDto };
+    
+    // 如果需要更新userid字段，显式设置（即使是null也要更新）
+    if (shouldUpdateDingtalkUserId) {
+      updateData.dingtalk_userid = dingtalkUserId;
+    }
+
     const updated = await this.prisma.user.update({
       where: { user_id: id },
-      data: updateUserDto,
+      data: updateData,
     });
 
     return {

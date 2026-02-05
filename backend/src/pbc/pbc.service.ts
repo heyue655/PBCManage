@@ -444,6 +444,7 @@ export class PbcService {
           : '当前周期';
 
         await this.dingtalkService.sendSubmitNotification(
+          user.supervisor.organization || '安恒',
           user.supervisor.dingtalk_userid,
           user.real_name,
           periodName,

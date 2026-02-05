@@ -10,6 +10,7 @@ import {
   KeyOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  DingdingOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 import { authApi } from '../api';
@@ -65,6 +66,12 @@ const MainLayout: React.FC = () => {
         icon: <TeamOutlined />,
         label: '部门管理',
         roles: ['assistant', 'gm'], // 助理、总经理
+      },
+      {
+        key: '/dingtalk-apps',
+        icon: <DingdingOutlined />,
+        label: '钉钉应用管理',
+        roles: ['manager', 'assistant', 'gm'], // 经理、助理、总经理
       },
     ];
 

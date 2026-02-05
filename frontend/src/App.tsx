@@ -11,6 +11,7 @@ import ReviewDetail from './pages/Review/ReviewDetail';
 import UserManage from './pages/UserManage';
 import ChangePassword from './pages/ChangePassword';
 import { DepartmentList } from './pages/Department';
+import DingtalkAppManage from './pages/DingtalkAppManage';
 
 // 路由守卫组件
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -96,6 +97,16 @@ const App: React.FC = () => {
             element={
               <RoleRoute allowedRoles={['assistant', 'gm']}>
                 <DepartmentList />
+              </RoleRoute>
+            }
+          />
+          
+          {/* 钉钉应用管理 - 经理、助理、总经理 */}
+          <Route
+            path="dingtalk-apps"
+            element={
+              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']}>
+                <DingtalkAppManage />
               </RoleRoute>
             }
           />
