@@ -2,6 +2,40 @@ import request from './request';
 
 export type GoalType = 'business' | 'skill' | 'team';
 export type PbcStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'archived';
+export type TaskStatus = 'pending' | 'filling' | 'submitted' | 'approved' | 'rejected' | 'archived';
+
+export interface PbcTask {
+  task_id: number;
+  user_id: number;
+  period_id: number;
+  distributed_by: number;
+  created_at: string;
+  updated_at: string;
+  period?: {
+    period_id: number;
+    year: number;
+    quarter: number;
+    status: string;
+  };
+  user?: {
+    user_id: number;
+    real_name: string;
+    department?: {
+      department_id: number;
+      department_name: string;
+    };
+  };
+  distributor?: {
+    user_id: number;
+    real_name: string;
+  };
+  goals_count?: number;
+  total_weight?: number;
+  task_status?: TaskStatus;
+  // populated in detail view
+  goals?: PbcGoal[];
+  evaluation?: any;
+}
 
 export interface PbcGoal {
   goal_id: number;
@@ -177,5 +211,18 @@ export const pbcApi = {
       periodId,
       overallComment,
     });
+  },
+
+  // ====== 任务下发 ======
+  getTasks: (mode?: 'team', periodId?: number): Promise<PbcTask[]> => {
+    return request.get('/pbc/tasks', { params: { mode, periodId } });
+  },
+
+  getTaskDetail: (taskId: number): Promise<PbcTask> => {
+    return request.get(`/pbc/tasks/${taskId}`);
+  },
+
+  createTasks: (userIds: number[], periodId: number): Promise<any> => {
+    return request.post('/pbc/tasks', { userIds, periodId });
   },
 };

@@ -2,12 +2,14 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePbcDto, UpdatePbcDto, CreatePeriodDto } from './dto';
 import { DingtalkService } from '../dingtalk/dingtalk.service';
+import { PerformanceService } from '../performance/performance.service';
 
 @Injectable()
 export class PbcService {
   constructor(
     private prisma: PrismaService,
     private dingtalkService: DingtalkService,
+    private performanceService: PerformanceService,
   ) {}
 
   // 周期管理
@@ -823,7 +825,7 @@ export class PbcService {
     }
 
     // 更新整体评价记录
-    return this.prisma.pbcEvaluation.update({
+    const updatedEvaluation = await this.prisma.pbcEvaluation.update({
       where: {
         user_id_period_id: {
           user_id: userId,
@@ -835,6 +837,15 @@ export class PbcService {
         supervisor_submitted_at: new Date(),
       },
     });
+
+    // 自动生成绩效记录
+    await this.performanceService.generatePerformance(
+      userId,
+      periodId,
+      updatedEvaluation.evaluation_id,
+    );
+
+    return updatedEvaluation;
   }
 
   // 获取用户的PBC统计
@@ -898,5 +909,165 @@ export class PbcService {
       archived: '已归档',
     };
     return messages[status] || '未知状态';
+  }
+
+  // ====== 任务下发管理 ======
+
+  /** 助理/总经理下发本季度任务给指定员工 */
+  async createTasks(distributorId: number, userIds: number[], periodId: number) {
+    const distributor = await this.prisma.user.findUnique({ where: { user_id: distributorId } });
+    if (!distributor) throw new NotFoundException('操作人不存在');
+    if (distributor.role !== 'assistant' && distributor.role !== 'gm') {
+      throw new ForbiddenException('只有助理或总经理可以下发任务');
+    }
+    const period = await this.prisma.pbcPeriod.findUnique({ where: { period_id: periodId } });
+    if (!period) throw new NotFoundException('周期不存在');
+
+    const results: any[] = [];
+    const errors: any[] = [];
+
+    for (const userId of userIds) {
+      try {
+        const task = await this.prisma.pbcTask.upsert({
+          where: { user_id_period_id: { user_id: userId, period_id: periodId } },
+          create: { user_id: userId, period_id: periodId, distributed_by: distributorId },
+          update: { distributed_by: distributorId },
+          include: { user: { select: { user_id: true, real_name: true } }, period: true },
+        });
+        results.push(task);
+      } catch {
+        errors.push(userId);
+      }
+    }
+
+    return { success: results.length, errors: errors.length, tasks: results };
+  }
+
+  /** 获取当前用户已收到的任务列表（含目标统计） */
+  async getMyTasks(userId: number) {
+    const tasks = await this.prisma.pbcTask.findMany({
+      where: { user_id: userId },
+      include: {
+        period: true,
+        distributor: { select: { user_id: true, real_name: true } },
+      },
+      orderBy: [{ period: { year: 'desc' } }, { period: { quarter: 'desc' } }],
+    });
+
+    const result = await Promise.all(
+      tasks.map(async (task) => {
+        const goals = await this.prisma.pbcGoal.findMany({
+          where: { user_id: userId, period_id: task.period_id, parent_goal_id: null },
+        });
+        const totalWeight = goals.reduce((s, g) => s + Number(g.goal_weight), 0);
+        const taskStatus = this.computeTaskStatus(goals);
+        return { ...task, goals_count: goals.length, total_weight: totalWeight, task_status: taskStatus };
+      }),
+    );
+
+    return result;
+  }
+
+  /** 获取团队所有任务（管理员视角） */
+  async getTeamTasks(currentUserId: number, periodId?: number) {
+    const currentUser = await this.prisma.user.findUnique({
+      where: { user_id: currentUserId },
+      include: { department: true },
+    });
+    if (!currentUser) throw new NotFoundException('用户不存在');
+
+    const where: any = {};
+    if (periodId) where.period_id = periodId;
+
+    if (currentUser.role === 'employee') {
+      where.user_id = currentUserId;
+    } else if (currentUser.role === 'manager') {
+      if (!currentUser.department_id) return [];
+      const deptUsers = await this.prisma.user.findMany({
+        where: { department_id: currentUser.department_id },
+        select: { user_id: true },
+      });
+      where.user_id = { in: deptUsers.map(u => u.user_id) };
+    } else {
+      if (!currentUser.department_id) return [];
+      const { DepartmentsService } = await import('../departments/departments.service');
+      const deptService = new DepartmentsService(this.prisma);
+      const deptIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
+      const deptUsers = await this.prisma.user.findMany({
+        where: { department_id: { in: deptIds } },
+        select: { user_id: true },
+      });
+      where.user_id = { in: deptUsers.map(u => u.user_id) };
+    }
+
+    const tasks = await this.prisma.pbcTask.findMany({
+      where,
+      include: {
+        period: true,
+        user: { include: { department: true } },
+        distributor: { select: { user_id: true, real_name: true } },
+      },
+      orderBy: [{ period: { year: 'desc' } }, { period: { quarter: 'desc' } }],
+    });
+
+    const result = await Promise.all(
+      tasks.map(async (task) => {
+        const goals = await this.prisma.pbcGoal.findMany({
+          where: { user_id: task.user_id, period_id: task.period_id, parent_goal_id: null },
+        });
+        const totalWeight = goals.reduce((s, g) => s + Number(g.goal_weight), 0);
+        const taskStatus = this.computeTaskStatus(goals);
+        return { ...task, goals_count: goals.length, total_weight: totalWeight, task_status: taskStatus };
+      }),
+    );
+
+    return result;
+  }
+
+  /** 获取单个任务详情（含全部目标和评价） */
+  async getTaskDetail(taskId: number, requesterId: number) {
+    const task = await this.prisma.pbcTask.findUnique({
+      where: { task_id: taskId },
+      include: {
+        period: true,
+        user: { include: { department: true } },
+        distributor: { select: { user_id: true, real_name: true } },
+      },
+    });
+    if (!task) throw new NotFoundException('任务不存在');
+
+    const requester = await this.prisma.user.findUnique({ where: { user_id: requesterId } });
+    // 普通员工只能查看自己的任务
+    if (requester?.role === 'employee' && task.user_id !== requesterId) {
+      throw new ForbiddenException('无权查看此任务');
+    }
+
+    const goals = await this.prisma.pbcGoal.findMany({
+      where: { user_id: task.user_id, period_id: task.period_id, parent_goal_id: null },
+      include: {
+        approvals: { orderBy: { created_at: 'desc' }, take: 1, include: { reviewer: { select: { real_name: true } } } },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+
+    const evaluation = await this.prisma.pbcEvaluation.findUnique({
+      where: { user_id_period_id: { user_id: task.user_id, period_id: task.period_id } },
+    });
+
+    const totalWeight = goals.reduce((s, g) => s + Number(g.goal_weight), 0);
+    const taskStatus = this.computeTaskStatus(goals);
+
+    return { ...task, goals, evaluation, total_weight: totalWeight, task_status: taskStatus };
+  }
+
+  /** 推导任务的整体状态（从目标状态得出） */
+  private computeTaskStatus(goals: any[]): string {
+    if (!goals || goals.length === 0) return 'pending';
+    const statuses = goals.map(g => g.status as string);
+    if (statuses.every(s => s === 'archived')) return 'archived';
+    if (statuses.some(s => s === 'rejected')) return 'rejected';
+    if (statuses.every(s => s === 'approved' || s === 'archived')) return 'approved';
+    if (statuses.some(s => s === 'submitted')) return 'submitted';
+    return 'filling';
   }
 }

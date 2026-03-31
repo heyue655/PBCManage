@@ -5,6 +5,8 @@ import MainLayout from './components/MainLayout';
 import Login from './pages/Login';
 import PBCList from './pages/PBC/PBCList';
 import PBCForm from './pages/PBC/PBCForm';
+import TaskDetail from './pages/PBC/TaskDetail';
+import DistributeTask from './pages/PBC/DistributeTask';
 import TeamGoals from './pages/PBC/TeamGoals';
 import ReviewList from './pages/Review/ReviewList';
 import ReviewDetail from './pages/Review/ReviewDetail';
@@ -12,6 +14,7 @@ import UserManage from './pages/UserManage';
 import ChangePassword from './pages/ChangePassword';
 import { DepartmentList } from './pages/Department';
 import DingtalkAppManage from './pages/DingtalkAppManage';
+import PerformanceList from './pages/Performance';
 
 // 路由守卫组件
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -50,8 +53,19 @@ const App: React.FC = () => {
           <Route index element={<Navigate to="/pbc" replace />} />
           {/* 我的PBC - 所有角色 */}
           <Route path="pbc" element={<PBCList />} />
+          <Route path="pbc/task/:taskId" element={<TaskDetail />} />
           <Route path="pbc/create" element={<PBCForm />} />
           <Route path="pbc/edit/:id" element={<PBCForm />} />
+
+          {/* 下发任务 - 助理、总经理 */}
+          <Route
+            path="distribute-task"
+            element={
+              <RoleRoute allowedRoles={['assistant', 'gm']}>
+                <DistributeTask />
+              </RoleRoute>
+            }
+          />
           
           {/* 团队目标 - 经理、助理、总经理 */}
           <Route
@@ -101,6 +115,16 @@ const App: React.FC = () => {
             }
           />
           
+          {/* 绩效管理 - 经理、助理、总经理 */}
+          <Route
+            path="performance"
+            element={
+              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']}>
+                <PerformanceList />
+              </RoleRoute>
+            }
+          />
+
           {/* 钉钉应用管理 - 经理、助理、总经理 */}
           <Route
             path="dingtalk-apps"

@@ -38,6 +38,9 @@ model User {
   approvals       PbcApproval[]
   evaluations     PbcEvaluation[]
   pbcGoals        PbcGoal[]
+  performances    PbcPerformance[]
+  receivedTasks   PbcTask[]       @relation("TaskRecipient")
+  distributedTasks PbcTask[]      @relation("TaskDistributor")
   department      Department?     @relation(fields: [department_id], references: [department_id])
   supervisor      User?           @relation("UserSupervisor", fields: [supervisor_id], references: [user_id])
   subordinates    User[]          @relation("UserSupervisor")
@@ -56,8 +59,10 @@ model PbcPeriod {
   status      PeriodStatus    @default(active)
   created_at  DateTime        @default(now())
   updated_at  DateTime        @updatedAt
-  evaluations PbcEvaluation[]
-  pbcGoals    PbcGoal[]
+  evaluations   PbcEvaluation[]
+  pbcGoals      PbcGoal[]
+  performances  PbcPerformance[]
+  tasks         PbcTask[]
 
   @@unique([year, quarter])
   @@map("pbc_periods")
@@ -101,6 +106,24 @@ model PbcGoal {
   @@map("pbc_goals")
 }
 
+model PbcTask {
+  task_id        Int       @id @default(autoincrement())
+  user_id        Int
+  period_id      Int
+  distributed_by Int
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  user           User      @relation("TaskRecipient", fields: [user_id], references: [user_id], onDelete: Cascade)
+  distributor    User      @relation("TaskDistributor", fields: [distributed_by], references: [user_id])
+  period         PbcPeriod @relation(fields: [period_id], references: [period_id])
+
+  @@unique([user_id, period_id])
+  @@index([user_id])
+  @@index([period_id])
+  @@index([distributed_by])
+  @@map("pbc_tasks")
+}
+
 model PbcApproval {
   approval_id Int            @id @default(autoincrement())
   goal_id     Int
@@ -117,22 +140,49 @@ model PbcApproval {
 }
 
 model PbcEvaluation {
-  evaluation_id              Int       @id @default(autoincrement())
+  evaluation_id              Int              @id @default(autoincrement())
   user_id                    Int
   period_id                  Int
-  self_overall_comment       String?   @db.Text
+  self_overall_comment       String?          @db.Text
   self_submitted_at          DateTime?
-  supervisor_overall_comment String?   @db.Text
+  self_eval_reject_reason    String?          @db.Text
+  self_eval_rejected_at      DateTime?
+  supervisor_overall_comment String?          @db.Text
   supervisor_submitted_at    DateTime?
-  created_at                 DateTime  @default(now())
-  updated_at                 DateTime  @updatedAt
-  period                     PbcPeriod @relation(fields: [period_id], references: [period_id], onDelete: Cascade)
-  user                       User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  created_at                 DateTime         @default(now())
+  updated_at                 DateTime         @updatedAt
+  period                     PbcPeriod        @relation(fields: [period_id], references: [period_id], onDelete: Cascade)
+  user                       User             @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  performance                PbcPerformance?
 
   @@unique([user_id, period_id], map: "unique_user_period")
   @@index([period_id], map: "idx_period_id")
   @@index([user_id], map: "idx_user_id")
   @@map("pbc_evaluations")
+}
+
+model PbcPerformance {
+  performance_id             Int            @id @default(autoincrement())
+  user_id                    Int
+  period_id                  Int
+  evaluation_id              Int            @unique
+  performance_level          String?        @db.VarChar(50)
+  performance_comment        String?        @db.Text
+  has_ai_contribution        Boolean?
+  ai_performance_comment     String?        @db.Text
+  bottom_mgmt_status         String?        @db.VarChar(100)
+  planned_elimination_date   DateTime?      @db.Date
+  created_at                 DateTime       @default(now())
+  updated_at                 DateTime       @updatedAt
+  evaluation                 PbcEvaluation  @relation(fields: [evaluation_id], references: [evaluation_id], onDelete: Cascade)
+  user                       User           @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  period                     PbcPeriod      @relation(fields: [period_id], references: [period_id], onDelete: Cascade)
+
+  @@unique([user_id, period_id])
+  @@index([user_id])
+  @@index([period_id])
+  @@index([evaluation_id])
+  @@map("pbc_performances")
 }
 
 model LoginLog {

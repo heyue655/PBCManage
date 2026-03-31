@@ -3,3 +3,4 @@ export * from './users';
 export * from './pbc';
 export * from './reviews';
 export * from './departments';
+export * from './performance';

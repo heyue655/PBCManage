@@ -13,10 +13,10 @@ export class UsersController {
   @Get()
   async findAll(
     @Request() req: any,
-    @Query('departmentId') departmentId?: number,
+    @Query('departmentId') departmentId?: string,
     @Query('role') role?: UserRole,
   ) {
-    return this.usersService.findAll(req.user.userId, { departmentId, role });
+    return this.usersService.findAll(req.user.userId, { departmentId: departmentId ? +departmentId : undefined, role });
   }
 
   @Get('me')
@@ -30,13 +30,13 @@ export class UsersController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: number) {
-    return this.usersService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    return this.usersService.findOne(+id);
   }
 
   @Get(':id/subordinates')
-  async findSubordinates(@Param('id') id: number) {
-    return this.usersService.findSubordinates(id);
+  async findSubordinates(@Param('id') id: string) {
+    return this.usersService.findSubordinates(+id);
   }
 
   @Post()
@@ -45,13 +45,13 @@ export class UsersController {
   }
 
   @Put(':id')
-  async update(@Request() req: any, @Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(req.user.userId, id, updateUserDto);
+  async update(@Request() req: any, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(req.user.userId, +id, updateUserDto);
   }
 
   @Delete(':id')
-  async delete(@Request() req: any, @Param('id') id: number) {
-    return this.usersService.delete(req.user.userId, id);
+  async delete(@Request() req: any, @Param('id') id: string) {
+    return this.usersService.delete(req.user.userId, +id);
   }
 
   @Post('import')

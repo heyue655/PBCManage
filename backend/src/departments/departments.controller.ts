@@ -20,8 +20,8 @@ export class DepartmentsController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: number) {
-    return this.departmentsService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    return this.departmentsService.findOne(+id);
   }
 
   // 只有总经理可以创建
@@ -35,19 +35,19 @@ export class DepartmentsController {
 
   // 只有总经理可以修改
   @Put(':id')
-  async update(@Request() req: any, @Param('id') id: number, @Body() updateDepartmentDto: UpdateDepartmentDto) {
+  async update(@Request() req: any, @Param('id') id: string, @Body() updateDepartmentDto: UpdateDepartmentDto) {
     if (req.user.role !== 'gm') {
       throw new ForbiddenException('只有总经理可以修改部门');
     }
-    return this.departmentsService.update(id, updateDepartmentDto);
+    return this.departmentsService.update(+id, updateDepartmentDto);
   }
 
   // 只有总经理可以删除
   @Delete(':id')
-  async delete(@Request() req: any, @Param('id') id: number) {
+  async delete(@Request() req: any, @Param('id') id: string) {
     if (req.user.role !== 'gm') {
       throw new ForbiddenException('只有总经理可以删除部门');
     }
-    return this.departmentsService.delete(id);
+    return this.departmentsService.delete(+id);
   }
 }

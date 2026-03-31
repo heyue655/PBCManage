@@ -11,6 +11,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   DingdingOutlined,
+  DeploymentUnitOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 import { authApi } from '../api';
@@ -44,6 +46,12 @@ const MainLayout: React.FC = () => {
         roles: ['employee', 'manager', 'assistant', 'gm'], // 所有角色
       },
       {
+        key: '/distribute-task',
+        icon: <DeploymentUnitOutlined />,
+        label: '下发任务',
+        roles: ['assistant', 'gm'], // 仅助理、总经理
+      },
+      {
         key: '/team-goals',
         icon: <AuditOutlined />,
         label: '团队目标',
@@ -66,6 +74,12 @@ const MainLayout: React.FC = () => {
         icon: <TeamOutlined />,
         label: '部门管理',
         roles: ['assistant', 'gm'], // 助理、总经理
+      },
+      {
+        key: '/performance',
+        icon: <TrophyOutlined />,
+        label: '绩效管理',
+        roles: ['manager', 'assistant', 'gm'], // 经理、助理、总经理
       },
       {
         key: '/dingtalk-apps',

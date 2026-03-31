@@ -20,6 +20,11 @@ export const reviewsApi = {
     return request.get('/reviews/pending');
   },
 
+  // 获取待评价列表（员工已提交自评）
+  getPendingEvaluations: (): Promise<any[]> => {
+    return request.get('/reviews/pending-evaluations');
+  },
+
   // 获取下属历史记录
   getHistory: (params?: { year?: number; quarter?: number }): Promise<PbcGoal[]> => {
     return request.get('/reviews/history', { params });
@@ -48,5 +53,10 @@ export const reviewsApi = {
   // 主管评估
   supervisorEvaluate: (goalId: number, score: number, comment?: string): Promise<PbcGoal> => {
     return request.post(`/reviews/${goalId}/supervisor-evaluate`, { score, comment });
+  },
+
+  // 驳回自评
+  rejectSelfEvaluation: (userId: number, periodId: number, reason: string): Promise<any> => {
+    return request.post('/reviews/reject-self-evaluation', { userId, periodId, reason });
   },
 };

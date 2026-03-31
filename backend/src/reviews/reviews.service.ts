@@ -327,6 +327,103 @@ export class ReviewsService {
     });
   }
 
+  // 获取待评价列表（员工已提交自评，主管未评价）
+  async getPendingEvaluations(supervisorId: number) {
+    const allSubordinateIds = await this.getAllSubordinateIds(supervisorId);
+    if (allSubordinateIds.length === 0) return [];
+
+    const evaluations = await this.prisma.pbcEvaluation.findMany({
+      where: {
+        user_id: { in: allSubordinateIds },
+        self_submitted_at: { not: null },
+        supervisor_submitted_at: null,
+      },
+      include: {
+        user: {
+          select: {
+            user_id: true,
+            real_name: true,
+            department: { select: { department_name: true } },
+          },
+        },
+        period: true,
+      },
+    });
+
+    // 为每个评价附带目标数据
+    const result = [];
+    for (const ev of evaluations) {
+      const goals = await this.prisma.pbcGoal.findMany({
+        where: {
+          user_id: ev.user_id,
+          period_id: ev.period_id,
+          parent_goal_id: null,
+        },
+        orderBy: { created_at: 'asc' },
+      });
+      result.push({ ...ev, goals });
+    }
+    return result;
+  }
+
+  // 驳回自评
+  async rejectSelfEvaluation(
+    userId: number,
+    periodId: number,
+    reviewerId: number,
+    reason: string,
+  ) {
+    await this.validateReviewPermission(reviewerId, userId);
+
+    const evaluation = await this.prisma.pbcEvaluation.findUnique({
+      where: { user_id_period_id: { user_id: userId, period_id: periodId } },
+      include: { user: true, period: true },
+    });
+
+    if (!evaluation) {
+      throw new NotFoundException('未找到评价记录');
+    }
+
+    if (!evaluation.self_submitted_at) {
+      throw new BadRequestException('员工尚未提交自评');
+    }
+
+    if (evaluation.supervisor_submitted_at) {
+      throw new BadRequestException('主管已完成评价，无法驳回');
+    }
+
+    // 清除 self_submitted_at，保留目标级别的自评分数/说明供员工修改
+    const updated = await this.prisma.pbcEvaluation.update({
+      where: { user_id_period_id: { user_id: userId, period_id: periodId } },
+      data: {
+        self_submitted_at: null,
+        self_eval_reject_reason: reason,
+        self_eval_rejected_at: new Date(),
+      },
+    });
+
+    // 发送钉钉通知
+    try {
+      if (evaluation.user?.dingtalk_userid) {
+        const periodName = evaluation.period
+          ? `${evaluation.period.year}年第${evaluation.period.quarter}季度`
+          : '当前周期';
+        await this.dingtalkService.sendWorkNotification(
+          evaluation.user.organization || '安恒',
+          [evaluation.user.dingtalk_userid],
+          {
+            title: '自评被驳回',
+            text: `您 ${periodName} 的自评已被主管驳回，原因：${reason}。请修改后重新提交。`,
+          },
+        );
+      }
+    } catch (error) {
+      console.error('发送钉钉通知失败:', error);
+    }
+
+    return { message: '已驳回自评', evaluation: updated };
+  }
+
   // 验证审核权限
   private async validateReviewPermission(reviewerId: number, targetUserId: number) {
     const reviewer = await this.prisma.user.findUnique({

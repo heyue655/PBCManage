@@ -8,7 +8,6 @@ import {
   Space,
   Button,
   Modal,
-  Form,
   InputNumber,
   message,
   Descriptions,
@@ -59,13 +58,8 @@ const TeamGoals: React.FC = () => {
   // 评价相关状态
   const [evaluationModalVisible, setEvaluationModalVisible] = useState(false);
   const [currentEvaluationData, setCurrentEvaluationData] = useState<any>(null);
-  const [supervisorEvaluateModalVisible, setSupervisorEvaluateModalVisible] = useState(false);
-  const [currentGoal, setCurrentGoal] = useState<PbcGoal | null>(null);
-  const [supervisorForm] = Form.useForm();
-  const [overallSupervisorModalVisible, setOverallSupervisorModalVisible] = useState(false);
-  const [overallSupervisorForm] = Form.useForm();
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  const [currentPeriodId, setCurrentPeriodId] = useState<number | null>(null);
+  const [supervisorInputs, setSupervisorInputs] = useState<Record<number, { score?: number; comment: string }>>({});
+  const [overallSupervisorComment, setOverallSupervisorComment] = useState('');
 
   const fetchPeriods = async () => {
     try {
@@ -125,6 +119,21 @@ const TeamGoals: React.FC = () => {
     fetchData();
   }, [selectedPeriod]);
 
+  // 初始化内联主管评价数据
+  useEffect(() => {
+    if (currentEvaluationData?.goals) {
+      const inputs: Record<number, { score?: number; comment: string }> = {};
+      currentEvaluationData.goals.forEach((g: any) => {
+        inputs[g.goal_id] = {
+          score: g.supervisor_score ? Number(g.supervisor_score) : undefined,
+          comment: g.supervisor_comment || '',
+        };
+      });
+      setSupervisorInputs(inputs);
+      setOverallSupervisorComment(currentEvaluationData.evaluation?.supervisor_overall_comment || '');
+    }
+  }, [currentEvaluationData]);
+
   useEffect(() => {
     // 筛选逻辑
     let filtered = groupedData;
@@ -159,72 +168,52 @@ const TeamGoals: React.FC = () => {
     }
   };
 
-  // 打开主管评价模态框
-  const handleOpenSupervisorEvaluate = (goal: PbcGoal) => {
-    setCurrentGoal(goal);
-    supervisorForm.setFieldsValue({
-      score: (goal as any).supervisor_score || undefined,
-      comment: (goal as any).supervisor_comment || '',
+  // 批量保存所有主管评价
+  const [supervisorSavingAll, setSupervisorSavingAll] = useState(false);
+  const handleSaveAllSupervisorEval = async () => {
+    if (!currentEvaluationData?.goals) return;
+    const evaluableGoals = currentEvaluationData.goals.filter((g: any) => g.self_score);
+    // 校验所有已自评目标都已填写主管评价
+    const missing = evaluableGoals.filter((g: any) => {
+      const input = supervisorInputs[g.goal_id];
+      return input?.score == null || !input?.comment;
     });
-    setSupervisorEvaluateModalVisible(true);
-  };
-
-  // 提交单个目标主管评价
-  const handleSupervisorEvaluate = async () => {
-    try {
-      const values = await supervisorForm.validateFields();
-      if (currentGoal) {
-        await pbcApi.supervisorEvaluate(currentGoal.goal_id, values.score, values.comment);
-        message.success('评价提交成功');
-        setSupervisorEvaluateModalVisible(false);
-        supervisorForm.resetFields();
-        fetchData();
-        
-        // 如果已打开评价详情，刷新数据
-        if (currentEvaluationData) {
-          handleViewEvaluation(currentGoal.user_id, currentGoal.period_id!);
-        }
-      }
-    } catch (error: any) {
-      if (error.errorFields) {
-        return;
-      }
-      message.error(error.response?.data?.message || '评价提交失败');
+    if (missing.length > 0) {
+      message.warning(`还有 ${missing.length} 个目标未填写主管评价，请全部填写后再保存`);
+      return;
     }
-  };
-
-  // 打开整体主管评价模态框
-  const handleOpenOverallSupervisorEvaluate = (userId: number, periodId: number) => {
-    setCurrentUserId(userId);
-    setCurrentPeriodId(periodId);
-    setOverallSupervisorModalVisible(true);
-  };
-
-  // 提交整体主管评价
-  const handleSubmitOverallSupervisorEvaluate = async () => {
-    try {
-      const values = await overallSupervisorForm.validateFields();
-      if (currentUserId && currentPeriodId) {
+    if (!overallSupervisorComment.trim()) {
+      message.warning('请填写整体主管评价');
+      return;
+    }
+    setSupervisorSavingAll(true);
+    let success = 0;
+    for (const g of evaluableGoals) {
+      const input = supervisorInputs[g.goal_id];
+      try {
+        await pbcApi.supervisorEvaluate(g.goal_id, input.score!, input.comment);
+        success++;
+      } catch { /* skip */ }
+    }
+    // 保存整体主管评价
+    if (currentEvaluationData?.goals?.[0]) {
+      try {
         await pbcApi.submitSupervisorEvaluation(
-          currentUserId,
-          currentPeriodId,
-          values.overallComment
+          currentEvaluationData.goals[0].user_id,
+          currentEvaluationData.goals[0].period_id,
+          overallSupervisorComment
         );
-        message.success('整体评价提交成功');
-        setOverallSupervisorModalVisible(false);
-        overallSupervisorForm.resetFields();
-        fetchData();
-        
-        // 关闭评价详情模态框
-        setEvaluationModalVisible(false);
-      }
-    } catch (error: any) {
-      if (error.errorFields) {
-        return;
-      }
-      message.error(error.response?.data?.message || '整体评价提交失败');
+      } catch { /* skip */ }
+    }
+    setSupervisorSavingAll(false);
+    if (success > 0) {
+      message.success(`已保存 ${success} 个目标的评价及整体评价`);
+      fetchData();
+      setEvaluationModalVisible(false);
     }
   };
+
+
 
   const userGroupColumns: ColumnsType<UserPeriodGroup> = [
     {
@@ -512,7 +501,24 @@ const TeamGoals: React.FC = () => {
                     <Space wrap>
                       <Tag color="processing">{goalTypeMap[goal.goal_type] || goal.goal_type}</Tag>
                       <Tag color={statusMap[goal.status].color}>{statusMap[goal.status].text}</Tag>
-                      <Tag color="orange">权重 {goal.goal_weight}%</Tag>
+                      {/* 醒目权重展示 */}
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          background: 'linear-gradient(135deg, #fa8c16, #faad14)',
+                          color: '#fff',
+                          borderRadius: 20,
+                          padding: '3px 14px',
+                          fontWeight: 700,
+                          fontSize: 15,
+                          letterSpacing: 1,
+                          minWidth: 64,
+                          textAlign: 'center',
+                          boxShadow: '0 2px 6px rgba(250,140,22,0.4)',
+                        }}
+                      >
+                        {goal.goal_weight}%
+                      </span>
                     </Space>
                   </div>
                 }
@@ -575,18 +581,13 @@ const TeamGoals: React.FC = () => {
           currentEvaluationData?.evaluation?.self_submitted_at &&
           !currentEvaluationData?.evaluation?.supervisor_submitted_at && (
             <Button
-              key="evaluate"
+              key="saveAll"
               type="primary"
-              onClick={() => {
-                if (currentEvaluationData?.goals?.[0]) {
-                  handleOpenOverallSupervisorEvaluate(
-                    currentEvaluationData.goals[0].user_id,
-                    currentEvaluationData.goals[0].period_id
-                  );
-                }
-              }}
+              loading={supervisorSavingAll}
+              icon={<EditOutlined />}
+              onClick={handleSaveAllSupervisorEval}
             >
-              提交整体评价
+              保存并提交评价
             </Button>
           ),
         ]}
@@ -626,197 +627,147 @@ const TeamGoals: React.FC = () => {
               </Card>
             )}
 
-            {/* 各目标详细评价 */}
+            {/* 各目标评价详情 - 卡片布局 + 内联评价 */}
             <Card title="各目标评价详情" size="small">
-              <Table
-                dataSource={sortGoals(currentEvaluationData.goals)}
-                rowKey="goal_id"
-                pagination={false}
-                size="small"
-                scroll={{ x: 'max-content' }}
-                columns={[
-                  {
-                    title: '目标名称',
-                    dataIndex: 'goal_name',
-                    key: 'goal_name',
-                    width: 140,
-                    ellipsis: {
-                      showTitle: false,
-                    },
-                    render: (text) => (
-                      <span title={text} style={{ cursor: 'pointer' }}>
-                        {text}
-                      </span>
-                    ),
-                  },
-                  {
-                    title: '类型',
-                    dataIndex: 'goal_type',
-                    key: 'goal_type',
-                    width: 100,
-                    render: (type: string) => goalTypeMap[type] || type,
-                  },
-                  {
-                    title: '自评分',
-                    key: 'self_score',
-                    width: 80,
-                    render: (_, record: any) => record.self_score || '-',
-                  },
-                  {
-                    title: '自评说明',
-                    key: 'self_comment',
-                    width: 180,
-                    ellipsis: {
-                      showTitle: false,
-                    },
-                    render: (_, record: any) => (
-                      <span title={record.self_comment} style={{ cursor: 'pointer' }}>
-                        {record.self_comment || '-'}
-                      </span>
-                    ),
-                  },
-                  {
-                    title: '主管评分',
-                    key: 'supervisor_score',
-                    width: 90,
-                    render: (_, record: any) => record.supervisor_score || '-',
-                  },
-                  {
-                    title: '主管评价',
-                    key: 'supervisor_comment',
-                    width: 180,
-                    ellipsis: {
-                      showTitle: false,
-                    },
-                    render: (_, record: any) => (
-                      <span title={record.supervisor_comment} style={{ cursor: 'pointer' }}>
-                        {record.supervisor_comment || '-'}
-                      </span>
-                    ),
-                  },
-                  {
-                    title: '操作',
-                    key: 'action',
-                    width: 100,
-                    fixed: 'right' as const,
-                    render: (_, record: any) => {
-                      if (currentEvaluationData.evaluation?.supervisor_submitted_at) {
-                        return <span style={{ color: '#999' }}>已完成</span>;
-                      }
-                      if (!record.self_score) {
-                        return <span style={{ color: '#999' }}>待自评</span>;
-                      }
-                      return (
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => handleOpenSupervisorEvaluate(record)}
+              {sortGoals(currentEvaluationData.goals).map((goal: any, index: number) => (
+                <Card
+                  key={goal.goal_id}
+                  size="small"
+                  style={{ marginBottom: 12, border: '1px solid #f0f0f0' }}
+                  title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <Space>
+                        <Tag color="blue">目标 {index + 1}</Tag>
+                        <span style={{ fontWeight: 600 }}>{goal.goal_name}</span>
+                      </Space>
+                      <Space>
+                        <Tag color="processing">{goalTypeMap[goal.goal_type] || goal.goal_type}</Tag>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            background: 'linear-gradient(135deg, #fa8c16, #faad14)',
+                            color: '#fff',
+                            borderRadius: 20,
+                            padding: '3px 14px',
+                            fontWeight: 700,
+                            fontSize: 15,
+                            letterSpacing: 1,
+                            minWidth: 64,
+                            textAlign: 'center',
+                            boxShadow: '0 2px 6px rgba(250,140,22,0.4)',
+                          }}
                         >
-                          {record.supervisor_score ? '修改评价' : '评价'}
-                        </Button>
-                      );
-                    },
-                  },
-                ]}
-              />
+                          {goal.goal_weight}%
+                        </span>
+                      </Space>
+                    </div>
+                  }
+                >
+                  <Descriptions column={1} size="small" bordered>
+                    <Descriptions.Item label="目标描述">{goal.goal_description}</Descriptions.Item>
+                    {goal.goal_type !== 'skill' && goal.measures && (
+                      <Descriptions.Item label="实现举措">{goal.measures}</Descriptions.Item>
+                    )}
+                    {goal.goal_type === 'business' && (
+                      <>
+                        <Descriptions.Item label={<span style={{ color: '#ff4d4f' }}>不可接受标准</span>}>
+                          <span style={{ color: '#ff4d4f' }}>{goal.unacceptable || '-'}</span>
+                        </Descriptions.Item>
+                        <Descriptions.Item label={<span style={{ color: '#1890ff' }}>达标标准</span>}>
+                          <span style={{ color: '#1890ff' }}>{goal.acceptable || '-'}</span>
+                        </Descriptions.Item>
+                        <Descriptions.Item label={<span style={{ color: '#52c41a' }}>卓越标准</span>}>
+                          <span style={{ color: '#52c41a' }}>{goal.excellent || '-'}</span>
+                        </Descriptions.Item>
+                      </>
+                    )}
+                  </Descriptions>
+
+                  {/* 员工自评 */}
+                  {goal.self_score && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 12, padding: '10px 12px', background: '#e6f4ff', borderRadius: 6, border: '1px solid #bae0ff', alignItems: 'flex-start' }}>
+                      <div style={{ flexShrink: 0, width: 90 }}>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>自评分</div>
+                        <span style={{ fontWeight: 700, color: '#1890ff', fontSize: 16 }}>{goal.self_score} 分</span>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>自评说明</div>
+                        <span>{goal.self_comment || '-'}</span>
+                      </div>
+                    </div>
+                  )}
+                  {/* 已有主管评价展示 */}
+                  {goal.supervisor_score && currentEvaluationData.evaluation?.supervisor_submitted_at && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 8, padding: '10px 12px', background: '#f6ffed', borderRadius: 6, border: '1px solid #b7eb8f', alignItems: 'flex-start' }}>
+                      <div style={{ flexShrink: 0, width: 90 }}>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>主管评分</div>
+                        <span style={{ fontWeight: 700, color: '#52c41a', fontSize: 16 }}>{goal.supervisor_score} 分</span>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>主管评价</div>
+                        <span>{goal.supervisor_comment || '-'}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 内联主管评价区域 */}
+                  {!currentEvaluationData.evaluation?.supervisor_submitted_at && goal.self_score && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 8, padding: '10px 12px', background: '#fcffe6', borderRadius: 6, border: '1px solid #eaff8f', alignItems: 'flex-start' }}>
+                      <div style={{ flexShrink: 0, width: 90 }}>
+                        <div style={{ fontSize: 12, color: '#52c41a', marginBottom: 4, fontWeight: 600 }}>主管评分</div>
+                        <InputNumber
+                          style={{ width: '100%' }}
+                          min={0} max={100}
+                          placeholder="0-100"
+                          value={supervisorInputs[goal.goal_id]?.score}
+                          onChange={(val) => setSupervisorInputs(prev => ({
+                            ...prev,
+                            [goal.goal_id]: { ...prev[goal.goal_id], score: val ?? undefined },
+                          }))}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, color: '#52c41a', marginBottom: 4, fontWeight: 600 }}>主管评价</div>
+                        <TextArea
+                          autoSize={{ minRows: 1, maxRows: 4 }}
+                          placeholder="请对员工的目标完成情况给出评价和建议"
+                          value={supervisorInputs[goal.goal_id]?.comment}
+                          onChange={(e) => setSupervisorInputs(prev => ({
+                            ...prev,
+                            [goal.goal_id]: { ...prev[goal.goal_id], comment: e.target.value },
+                          }))}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {!currentEvaluationData.evaluation?.supervisor_submitted_at && !goal.self_score && (
+                    <div style={{ marginTop: 8, color: '#999', fontStyle: 'italic' }}>员工尚未完成自评</div>
+                  )}
+                </Card>
+              ))}
             </Card>
-          </div>
-        )}
-      </Modal>
 
-      {/* 主管评价单个目标模态框 */}
-      <Modal
-        title="主管评价"
-        open={supervisorEvaluateModalVisible}
-        onOk={handleSupervisorEvaluate}
-        onCancel={() => {
-          setSupervisorEvaluateModalVisible(false);
-          supervisorForm.resetFields();
-        }}
-        okText="提交"
-        cancelText="取消"
-        width={700}
-      >
-        {currentGoal && (
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <strong>目标名称：</strong>{currentGoal.goal_name}
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <strong>目标描述：</strong>{currentGoal.goal_description}
-            </div>
-            <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <div><strong>员工自评分数：</strong>{(currentGoal as any).self_score}</div>
-              <div style={{ marginTop: 8 }}>
-                <strong>员工自评说明：</strong>
-                <div style={{ marginTop: 4 }}>{(currentGoal as any).self_comment}</div>
-              </div>
-            </div>
-            <Form form={supervisorForm} layout="vertical">
-              <Form.Item
-                name="score"
-                label="主管评分"
-                rules={[
-                  { required: true, message: '请输入评分' },
-                  { type: 'number', min: 0, max: 100, message: '分数范围：0-100' },
-                ]}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  placeholder="请输入0-100的分数"
-                  min={0}
-                  max={100}
-                />
-              </Form.Item>
-              <Form.Item
-                name="comment"
-                label="主管评价"
-                rules={[{ required: true, message: '请输入评价意见' }]}
-              >
+            {/* 内联整体主管评价 */}
+            {currentEvaluationData.evaluation?.self_submitted_at &&
+              !currentEvaluationData.evaluation?.supervisor_submitted_at && (
+              <div style={{ marginTop: 16, padding: '12px 16px', background: '#fcffe6', borderRadius: 6, border: '1px solid #eaff8f' }}>
+                <div style={{ fontWeight: 600, marginBottom: 8, color: '#52c41a', fontSize: 13 }}>
+                  <EditOutlined style={{ marginRight: 4 }} />
+                  整体主管评价
+                </div>
                 <TextArea
-                  rows={4}
-                  placeholder="请对员工的目标完成情况给出评价和建议"
+                  rows={3}
+                  autoSize={{ minRows: 3, maxRows: 8 }}
+                  showCount
+                  maxLength={1000}
+                  placeholder="请总结员工本季度的工作表现、亮点、不足、改进建议等"
+                  value={overallSupervisorComment}
+                  onChange={(e) => setOverallSupervisorComment(e.target.value)}
                 />
-              </Form.Item>
-            </Form>
+              </div>
+            )}
           </div>
         )}
-      </Modal>
-
-      {/* 提交整体主管评价模态框 */}
-      <Modal
-        title="提交整体主管评价"
-        open={overallSupervisorModalVisible}
-        onOk={handleSubmitOverallSupervisorEvaluate}
-        onCancel={() => {
-          setOverallSupervisorModalVisible(false);
-          overallSupervisorForm.resetFields();
-        }}
-        okText="提交"
-        cancelText="取消"
-        width={700}
-      >
-        <div style={{ marginBottom: 16, color: '#666' }}>
-          请对该员工本季度的整体工作表现进行总结和评价
-        </div>
-        <Form form={overallSupervisorForm} layout="vertical">
-          <Form.Item
-            name="overallComment"
-            label="整体评价（至少100字）"
-            rules={[
-              { required: true, message: '请输入整体评价' },
-              { min: 100, message: '整体评价至少需要100字' },
-            ]}
-          >
-            <TextArea
-              rows={8}
-              placeholder="请总结员工本季度的工作表现、亮点、不足、改进建议等（至少100字）"
-              showCount
-              maxLength={1000}
-            />
-          </Form.Item>
-        </Form>
       </Modal>
     </>
   );
