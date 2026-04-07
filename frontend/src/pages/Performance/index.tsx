@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Select, Space, Tag, Input, DatePicker, Switch, message, Button, Modal, Descriptions } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import { performanceApi, Performance, UpdatePerformanceDto, pbcApi } from '../../api';
 import { useAuthStore } from '../../store/authStore';
 import type { ColumnsType } from 'antd/es/table';
@@ -45,6 +46,7 @@ const PerformanceList: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValues, setEditValues] = useState<UpdatePerformanceDto>({});
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { user: currentUser } = useAuthStore();
 
   // 判断当前用户是否可编辑某条绩效记录
@@ -143,6 +145,18 @@ const PerformanceList: React.FC = () => {
     setCurrentRecord(null);
     setIsEditing(false);
     setEditValues({});
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await performanceApi.export(selectedPeriodId);
+      message.success('导出成功');
+    } catch {
+      // handled
+    } finally {
+      setExporting(false);
+    }
   };
 
   const columns: ColumnsType<Performance> = [
@@ -327,6 +341,13 @@ const PerformanceList: React.FC = () => {
                 label: `${p.year}年 Q${p.quarter}`,
               }))}
           />
+          <Button
+            icon={<DownloadOutlined />}
+            loading={exporting}
+            onClick={handleExport}
+          >
+            导出Excel
+          </Button>
         </Space>
       }
     >

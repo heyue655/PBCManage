@@ -1,4 +1,5 @@
-import { Controller, Get, Put, Param, Query, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Put, Param, Query, Body, UseGuards, Request, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { PerformanceService } from './performance.service';
 import { UpdatePerformanceDto } from './dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -14,6 +15,22 @@ export class PerformanceController {
     return this.performanceService.getPerformances(
       periodId ? +periodId : undefined,
     );
+  }
+
+  // 导出绩效为Excel（放在 :id 之前避免路由冲突）
+  @Get('export')
+  async exportPerformances(
+    @Query('periodId') periodId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.performanceService.exportToExcel(
+      periodId ? +periodId : undefined,
+    );
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename=performance.xlsx',
+    });
+    res.send(buffer);
   }
 
   // 获取单条绩效详情

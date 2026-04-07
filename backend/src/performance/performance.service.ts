@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePerformanceDto } from './dto';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class PerformanceService {
@@ -93,6 +94,35 @@ export class PerformanceService {
         evaluation: true,
       },
     });
+  }
+
+  // 导出绩效为Excel
+  async exportToExcel(periodId?: number): Promise<Buffer> {
+    const list = await this.getPerformances(periodId);
+
+    const rows = list.map((item: any) => ({
+      '姓名': item.user?.real_name || '',
+      '部门': item.user?.department?.department_name || '',
+      '季度': `${item.period?.year}Q${item.period?.quarter}`,
+      '绩效等级': item.performance_level || '',
+      '绩效评价': item.performance_comment || '',
+      '是否有AI维度的组织贡献': item.has_ai_contribution === true ? '是' : item.has_ai_contribution === false ? '否' : '',
+      'AI维度绩效评价': item.ai_performance_comment || '',
+      '末位管理执行状态': item.bottom_mgmt_status || '',
+      '拟淘汰时间': item.planned_elimination_date
+        ? new Date(item.planned_elimination_date).toISOString().slice(0, 10)
+        : '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // 设置列宽
+    ws['!cols'] = [
+      { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 10 },
+      { wch: 30 }, { wch: 18 }, { wch: 30 }, { wch: 18 }, { wch: 14 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '绩效管理');
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
   // 自动生成绩效记录（主管提交评价后调用）

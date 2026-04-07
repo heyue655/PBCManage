@@ -57,4 +57,24 @@ export const performanceApi = {
   update: (id: number, dto: UpdatePerformanceDto): Promise<Performance> => {
     return request.put(`/performance/${id}`, dto);
   },
+
+  // 导出Excel
+  export: (periodId?: number): Promise<void> => {
+    return request
+      .get('/performance/export', {
+        params: periodId ? { periodId } : {},
+        responseType: 'blob',
+      })
+      .then((res: any) => {
+        const blob = new Blob([res], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '绩效管理.xlsx';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      });
+  },
 };
