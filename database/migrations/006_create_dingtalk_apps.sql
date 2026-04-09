@@ -1,7 +1,7 @@
 -- 创建钉钉应用配置表
 -- 执行时间: 2026-01-26
 
-USE pbc_management;
+USE pbc_manage;
 
 -- 创建钉钉应用配置表
 CREATE TABLE IF NOT EXISTS dingtalk_apps (

@@ -1,7 +1,7 @@
 -- 修复钉钉应用表的日期字段
 -- 执行时间: 2026-02-05
 
-USE pbc_management;
+USE pbc_manage;
 
 -- 方案1: 删除表并重新创建（如果表中没有重要数据）
 DROP TABLE IF EXISTS dingtalk_apps;

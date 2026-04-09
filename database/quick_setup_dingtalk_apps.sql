@@ -1,7 +1,7 @@
 -- 快速创建钉钉应用表并插入数据
 -- 直接在MySQL客户端执行
 
-USE pbc_management;
+USE pbc_manage;
 
 -- 创建钉钉应用配置表
 CREATE TABLE IF NOT EXISTS dingtalk_apps (

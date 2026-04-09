@@ -1,7 +1,7 @@
 -- 钉钉应用配置初始数据
 -- 执行时间: 2026-01-26
 
-USE pbc_management;
+USE pbc_manage;
 
 -- 插入安恒组织钉钉应用配置
 INSERT INTO dingtalk_apps (organization, app_name, agent_id, corp_id, app_key, app_secret, is_active) 
