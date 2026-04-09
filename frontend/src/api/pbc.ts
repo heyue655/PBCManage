@@ -205,11 +205,13 @@ export const pbcApi = {
     userId: number,
     periodId: number,
     overallComment: string,
+    overallScore?: number,
   ): Promise<any> => {
     return request.post('/pbc/submit-supervisor-evaluation', {
       userId,
       periodId,
       overallComment,
+      overallScore,
     });
   },
 

@@ -11,6 +11,7 @@ export interface Performance {
   ai_performance_comment: string | null;
   bottom_mgmt_status: string | null;
   planned_elimination_date: string | null;
+  result_distributed_at: string | null;
   created_at: string;
   updated_at: string;
   user: {
@@ -31,6 +32,7 @@ export interface Performance {
   evaluation: {
     evaluation_id: number;
     supervisor_overall_comment: string | null;
+    supervisor_overall_score: number | null;
   };
 }
 
@@ -56,6 +58,11 @@ export const performanceApi = {
   // 更新绩效
   update: (id: number, dto: UpdatePerformanceDto): Promise<Performance> => {
     return request.put(`/performance/${id}`, dto);
+  },
+
+  // 下发绩效结果
+  distributeResults: (performanceIds: number[]): Promise<{ count: number; message: string }> => {
+    return request.post('/performance/distribute', { performanceIds });
   },
 
   // 导出Excel

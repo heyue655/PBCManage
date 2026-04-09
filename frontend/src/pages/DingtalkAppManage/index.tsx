@@ -204,7 +204,7 @@ const DingtalkAppManage: React.FC = () => {
             label="所属组织"
             rules={[{ required: true, message: '请输入所属组织' }]}
           >
-            <Input placeholder="例如：安恒、中宇华兴" disabled={!!editingApp} />
+            <Input placeholder="例如：安恒、耘瓴端" disabled={!!editingApp} />
           </Form.Item>
           <Form.Item
             name="app_name"

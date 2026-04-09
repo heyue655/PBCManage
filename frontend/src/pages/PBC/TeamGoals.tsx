@@ -41,6 +41,7 @@ interface UserPeriodGroup {
   periodName: string;
   goals: PbcGoal[];
   totalWeight: number;
+  supervisorOverallScore?: number;
 }
 
 const TeamGoals: React.FC = () => {
@@ -60,6 +61,7 @@ const TeamGoals: React.FC = () => {
   const [currentEvaluationData, setCurrentEvaluationData] = useState<any>(null);
   const [supervisorInputs, setSupervisorInputs] = useState<Record<number, { score?: number; comment: string }>>({});
   const [overallSupervisorComment, setOverallSupervisorComment] = useState('');
+  const [overallSupervisorScore, setOverallSupervisorScore] = useState<number | undefined>(undefined);
 
   const fetchPeriods = async () => {
     try {
@@ -89,6 +91,7 @@ const TeamGoals: React.FC = () => {
     goals.forEach((goal) => {
       const key = `${goal.user_id}-${goal.period_id || 0}`;
       if (!groups.has(key)) {
+        const evaluation = (goal as any).evaluation;
         groups.set(key, {
           userId: goal.user_id,
           userName: goal.user?.real_name || '',
@@ -99,6 +102,7 @@ const TeamGoals: React.FC = () => {
             : '未指定周期',
           goals: [],
           totalWeight: 0,
+          supervisorOverallScore: evaluation?.supervisor_overall_score ?? undefined,
         });
       }
       const group = groups.get(key)!;
@@ -131,6 +135,7 @@ const TeamGoals: React.FC = () => {
       });
       setSupervisorInputs(inputs);
       setOverallSupervisorComment(currentEvaluationData.evaluation?.supervisor_overall_comment || '');
+      setOverallSupervisorScore(currentEvaluationData.evaluation?.supervisor_overall_score ?? undefined);
     }
   }, [currentEvaluationData]);
 
@@ -172,28 +177,19 @@ const TeamGoals: React.FC = () => {
   const [supervisorSavingAll, setSupervisorSavingAll] = useState(false);
   const handleSaveAllSupervisorEval = async () => {
     if (!currentEvaluationData?.goals) return;
-    const evaluableGoals = currentEvaluationData.goals.filter((g: any) => g.self_score);
-    // 校验所有已自评目标都已填写主管评价
-    const missing = evaluableGoals.filter((g: any) => {
-      const input = supervisorInputs[g.goal_id];
-      return input?.score == null || !input?.comment;
-    });
-    if (missing.length > 0) {
-      message.warning(`还有 ${missing.length} 个目标未填写主管评价，请全部填写后再保存`);
-      return;
-    }
     if (!overallSupervisorComment.trim()) {
       message.warning('请填写整体主管评价');
       return;
     }
     setSupervisorSavingAll(true);
-    let success = 0;
+    const evaluableGoals = currentEvaluationData.goals.filter((g: any) => g.self_score);
     for (const g of evaluableGoals) {
       const input = supervisorInputs[g.goal_id];
-      try {
-        await pbcApi.supervisorEvaluate(g.goal_id, input.score!, input.comment);
-        success++;
-      } catch { /* skip */ }
+      if (input?.score != null) {
+        try {
+          await pbcApi.supervisorEvaluate(g.goal_id, input.score, input.comment);
+        } catch { /* skip */ }
+      }
     }
     // 保存整体主管评价
     if (currentEvaluationData?.goals?.[0]) {
@@ -201,16 +197,15 @@ const TeamGoals: React.FC = () => {
         await pbcApi.submitSupervisorEvaluation(
           currentEvaluationData.goals[0].user_id,
           currentEvaluationData.goals[0].period_id,
-          overallSupervisorComment
+          overallSupervisorComment,
+          overallSupervisorScore,
         );
       } catch { /* skip */ }
     }
     setSupervisorSavingAll(false);
-    if (success > 0) {
-      message.success(`已保存 ${success} 个目标的评价及整体评价`);
-      fetchData();
-      setEvaluationModalVisible(false);
-    }
+    message.success('整体评价已提交');
+    fetchData();
+    setEvaluationModalVisible(false);
   };
 
 
@@ -268,6 +263,24 @@ const TeamGoals: React.FC = () => {
           {weight}%
         </span>
       ),
+    },
+    {
+      title: '主管整体评分',
+      key: 'supervisorOverallScore',
+      dataIndex: 'supervisorOverallScore',
+      width: 120,
+      sorter: (a, b) => {
+        const aScore = a.supervisorOverallScore ?? -1;
+        const bScore = b.supervisorOverallScore ?? -1;
+        return aScore - bScore;
+      },
+      defaultSortOrder: 'descend',
+      render: (score?: number) =>
+        score != null ? (
+          <span style={{ fontWeight: 700, color: '#52c41a' }}>{score} 分</span>
+        ) : (
+          <span style={{ color: '#bbb' }}>-</span>
+        ),
     },
     {
       title: '操作',
@@ -578,8 +591,7 @@ const TeamGoals: React.FC = () => {
           <Button key="close" onClick={() => setEvaluationModalVisible(false)}>
             关闭
           </Button>,
-          currentEvaluationData?.evaluation?.self_submitted_at &&
-          !currentEvaluationData?.evaluation?.supervisor_submitted_at && (
+          currentEvaluationData?.evaluation?.self_submitted_at && (
             <Button
               key="saveAll"
               type="primary"
@@ -587,7 +599,7 @@ const TeamGoals: React.FC = () => {
               icon={<EditOutlined />}
               onClick={handleSaveAllSupervisorEval}
             >
-              保存并提交评价
+              保存评价
             </Button>
           ),
         ]}
@@ -611,16 +623,23 @@ const TeamGoals: React.FC = () => {
               </Card>
             )}
 
-            {/* 整体主管评价 */}
+            {/* 整体主管评价 - 已提交展示 */}
             {currentEvaluationData.evaluation?.supervisor_submitted_at && (
-              <Card title="整体主管评价" size="small" style={{ marginBottom: 16 }}>
-                <Descriptions column={1}>
+              <Card title="整体主管评价（已提交）" size="small" style={{ marginBottom: 16 }}>
+                <Descriptions column={2}>
                   <Descriptions.Item label="提交时间">
                     {new Date(
                       currentEvaluationData.evaluation.supervisor_submitted_at
                     ).toLocaleString('zh-CN')}
                   </Descriptions.Item>
-                  <Descriptions.Item label="整体评价">
+                  <Descriptions.Item label="整体评分">
+                    {currentEvaluationData.evaluation.supervisor_overall_score != null ? (
+                      <span style={{ fontWeight: 700, color: '#52c41a', fontSize: 16 }}>
+                        {currentEvaluationData.evaluation.supervisor_overall_score} 分
+                      </span>
+                    ) : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="整体评价" span={2}>
                     {currentEvaluationData.evaluation.supervisor_overall_comment}
                   </Descriptions.Item>
                 </Descriptions>
@@ -696,22 +715,9 @@ const TeamGoals: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  {/* 已有主管评价展示 */}
-                  {goal.supervisor_score && currentEvaluationData.evaluation?.supervisor_submitted_at && (
-                    <div style={{ display: 'flex', gap: 12, marginTop: 8, padding: '10px 12px', background: '#f6ffed', borderRadius: 6, border: '1px solid #b7eb8f', alignItems: 'flex-start' }}>
-                      <div style={{ flexShrink: 0, width: 90 }}>
-                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>主管评分</div>
-                        <span style={{ fontWeight: 700, color: '#52c41a', fontSize: 16 }}>{goal.supervisor_score} 分</span>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>主管评价</div>
-                        <span>{goal.supervisor_comment || '-'}</span>
-                      </div>
-                    </div>
-                  )}
 
                   {/* 内联主管评价区域 */}
-                  {!currentEvaluationData.evaluation?.supervisor_submitted_at && goal.self_score && (
+                  {goal.self_score && (
                     <div style={{ display: 'flex', gap: 12, marginTop: 8, padding: '10px 12px', background: '#fcffe6', borderRadius: 6, border: '1px solid #eaff8f', alignItems: 'flex-start' }}>
                       <div style={{ flexShrink: 0, width: 90 }}>
                         <div style={{ fontSize: 12, color: '#52c41a', marginBottom: 4, fontWeight: 600 }}>主管评分</div>
@@ -740,30 +746,45 @@ const TeamGoals: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  {!currentEvaluationData.evaluation?.supervisor_submitted_at && !goal.self_score && (
+                  {!goal.self_score && (
                     <div style={{ marginTop: 8, color: '#999', fontStyle: 'italic' }}>员工尚未完成自评</div>
                   )}
                 </Card>
               ))}
             </Card>
 
-            {/* 内联整体主管评价 */}
-            {currentEvaluationData.evaluation?.self_submitted_at &&
-              !currentEvaluationData.evaluation?.supervisor_submitted_at && (
+            {/* 内联整体主管评价 - 始终可编辑 */}
+            {currentEvaluationData.evaluation?.self_submitted_at && (
               <div style={{ marginTop: 16, padding: '12px 16px', background: '#fcffe6', borderRadius: 6, border: '1px solid #eaff8f' }}>
                 <div style={{ fontWeight: 600, marginBottom: 8, color: '#52c41a', fontSize: 13 }}>
                   <EditOutlined style={{ marginRight: 4 }} />
-                  整体主管评价
+                  整体主管评价 <span style={{ color: '#ff4d4f' }}>*</span>
                 </div>
-                <TextArea
-                  rows={3}
-                  autoSize={{ minRows: 3, maxRows: 8 }}
-                  showCount
-                  maxLength={1000}
-                  placeholder="请总结员工本季度的工作表现、亮点、不足、改进建议等"
-                  value={overallSupervisorComment}
-                  onChange={(e) => setOverallSupervisorComment(e.target.value)}
-                />
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div style={{ flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, color: '#52c41a', marginBottom: 4, fontWeight: 600 }}>整体评分（选填）</div>
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      placeholder="0-100"
+                      value={overallSupervisorScore}
+                      onChange={(val) => setOverallSupervisorScore(val ?? undefined)}
+                      style={{ width: 100 }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, color: '#52c41a', marginBottom: 4, fontWeight: 600 }}>整体评价（必填）</div>
+                    <TextArea
+                      rows={3}
+                      autoSize={{ minRows: 3, maxRows: 8 }}
+                      showCount
+                      maxLength={1000}
+                      placeholder="请总结员工本季度的工作表现、亮点、不足、改进建议等"
+                      value={overallSupervisorComment}
+                      onChange={(e) => setOverallSupervisorComment(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </div>

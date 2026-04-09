@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Param, Query, Body, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Put, Post, Param, Query, Body, UseGuards, Request, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { PerformanceService } from './performance.service';
 import { UpdatePerformanceDto } from './dto';
@@ -49,6 +49,19 @@ export class PerformanceController {
     return this.performanceService.updatePerformance(
       +id,
       dto,
+      req.user.userId,
+      req.user.role,
+    );
+  }
+
+  // 下发绩效结果（仅助理）
+  @Post('distribute')
+  async distributeResults(
+    @Request() req: any,
+    @Body() body: { performanceIds: number[] },
+  ) {
+    return this.performanceService.distributeResults(
+      body.performanceIds,
       req.user.userId,
       req.user.role,
     );

@@ -205,13 +205,14 @@ export class PbcController {
   @Post('submit-supervisor-evaluation')
   async submitSupervisorEvaluation(
     @Request() req: any,
-    @Body() body: { userId: number; periodId: number; overallComment: string },
+    @Body() body: { userId: number; periodId: number; overallComment: string; overallScore?: number },
   ) {
     return this.pbcService.submitSupervisorEvaluation(
       body.userId,
       body.periodId,
       req.user.userId,
       body.overallComment,
+      body.overallScore,
     );
   }
 }

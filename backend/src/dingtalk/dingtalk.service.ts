@@ -271,4 +271,27 @@ export class DingtalkService {
       }
     );
   }
+
+  /**
+   * 发送绩效结果下发通知（给员工）
+   */
+  async sendPerformanceDistributedNotification(
+    organization: string,
+    employeeDingtalkId: string,
+    periodName: string,
+  ): Promise<boolean> {
+    if (!employeeDingtalkId) {
+      this.logger.warn(`员工未配置钉钉ID，跳过发送通知 [${organization}]`);
+      return false;
+    }
+
+    return this.sendWorkNotification(
+      organization,
+      [employeeDingtalkId],
+      {
+        title: '绩效结果通知',
+        text: `您的 ${periodName} 绩效结果已下发，请登录系统查看主管评价与绩效等级。`,
+      }
+    );
+  }
 }

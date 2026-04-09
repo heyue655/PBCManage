@@ -274,7 +274,7 @@ const UserManage: React.FC = () => {
           >
             <Select placeholder="请选择所属组织">
               <Select.Option value="安恒">安恒</Select.Option>
-              <Select.Option value="中宇华兴">中宇华兴</Select.Option>
+              <Select.Option value="耘瓴端">耘瓴端</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="supervisor_id" label="直属主管">

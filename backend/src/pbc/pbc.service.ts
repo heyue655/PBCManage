@@ -624,10 +624,33 @@ export class PbcService {
       },
     });
 
+    // 批量查询对应的评价记录，附加到每个目标上
+    const userPeriodPairs = [
+      ...new Map(
+        results
+          .filter(g => g.period_id !== null)
+          .map(g => [`${g.user_id}_${g.period_id}`, { user_id: g.user_id, period_id: g.period_id! }]),
+      ).values(),
+    ];
+
+    const evaluations = userPeriodPairs.length > 0
+      ? await this.prisma.pbcEvaluation.findMany({
+          where: {
+            OR: userPeriodPairs.map(p => ({ user_id: p.user_id, period_id: p.period_id })),
+          },
+        })
+      : [];
+
+    const evalMap = new Map(evaluations.map(e => [`${e.user_id}_${e.period_id}`, e]));
+    const goalsWithEval = results.map(g => ({
+      ...g,
+      evaluation: evalMap.get(`${g.user_id}_${g.period_id}`) ?? null,
+    }));
+
     console.log('✅ 查询结果数量:', results.length);
     console.log('=== 查询团队目标结束 ===\n');
 
-    return results;
+    return goalsWithEval;
   }
 
   // 子目标管理
@@ -792,24 +815,8 @@ export class PbcService {
     periodId: number,
     supervisorId: number,
     overallComment: string,
+    overallScore?: number,
   ) {
-    // 检查该周期的所有目标是否都已主管评价
-    const goals = await this.prisma.pbcGoal.findMany({
-      where: {
-        user_id: userId,
-        period_id: periodId,
-        parent_goal_id: null,
-        status: 'approved',
-      },
-    });
-
-    const unevaluatedGoals = goals.filter(g => !g.supervisor_score);
-    if (unevaluatedGoals.length > 0) {
-      throw new BadRequestException(
-        `还有 ${unevaluatedGoals.length} 个目标未完成评价`,
-      );
-    }
-
     // 检查是否已提交自评
     const evaluation = await this.prisma.pbcEvaluation.findUnique({
       where: {
@@ -834,6 +841,7 @@ export class PbcService {
       },
       data: {
         supervisor_overall_comment: overallComment,
+        supervisor_overall_score: overallScore ?? null,
         supervisor_submitted_at: new Date(),
       },
     });
@@ -1054,10 +1062,37 @@ export class PbcService {
       where: { user_id_period_id: { user_id: task.user_id, period_id: task.period_id } },
     });
 
+    // 检查绩效结果是否已下发（员工视角需要控制可见性）
+    const performance = await this.prisma.pbcPerformance.findUnique({
+      where: { user_id_period_id: { user_id: task.user_id, period_id: task.period_id } },
+      select: { result_distributed_at: true },
+    });
+    const isDistributed = !!performance?.result_distributed_at;
+    const isEmployee = requester?.role === 'employee';
+
+    // 员工未下发时，隐藏主管评价字段
+    const maskedGoals = goals.map(g => {
+      if (isEmployee && !isDistributed) {
+        return { ...g, supervisor_score: null, supervisor_comment: null };
+      }
+      return g;
+    });
+
+    const maskedEvaluation = evaluation
+      ? isEmployee && !isDistributed
+        ? {
+            ...evaluation,
+            supervisor_overall_comment: null,
+            supervisor_overall_score: null,
+            supervisor_submitted_at: null,
+          }
+        : evaluation
+      : null;
+
     const totalWeight = goals.reduce((s, g) => s + Number(g.goal_weight), 0);
     const taskStatus = this.computeTaskStatus(goals);
 
-    return { ...task, goals, evaluation, total_weight: totalWeight, task_status: taskStatus };
+    return { ...task, goals: maskedGoals, evaluation: maskedEvaluation, total_weight: totalWeight, task_status: taskStatus };
   }
 
   /** 推导任务的整体状态（从目标状态得出） */

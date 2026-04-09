@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePerformanceDto } from './dto';
+import { DingtalkService } from '../dingtalk/dingtalk.service';
 import * as XLSX from 'xlsx';
 
 @Injectable()
 export class PerformanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private dingtalkService: DingtalkService,
+  ) {}
 
   // 查询绩效列表（按季度筛选）
   async getPerformances(periodId?: number) {
@@ -150,5 +154,46 @@ export class PerformanceService {
         performance_comment: evaluation?.supervisor_overall_comment || null,
       },
     });
+  }
+
+  // 下发绩效结果（助理操作）
+  async distributeResults(performanceIds: number[], currentUserId: number, currentRole: string) {
+    if (currentRole !== 'assistant') {
+      throw new ForbiddenException('仅助理可以下发绩效结果');
+    }
+
+    const performances = await this.prisma.pbcPerformance.findMany({
+      where: { performance_id: { in: performanceIds } },
+      include: {
+        user: true,
+        period: true,
+      },
+    });
+
+    const now = new Date();
+    await this.prisma.pbcPerformance.updateMany({
+      where: { performance_id: { in: performanceIds } },
+      data: { result_distributed_at: now },
+    });
+
+    // 发送钉钉通知
+    for (const perf of performances) {
+      try {
+        if (perf.user.dingtalk_userid) {
+          const periodName = perf.period
+            ? `${perf.period.year}年第${perf.period.quarter}季度`
+            : '当前周期';
+          await this.dingtalkService.sendPerformanceDistributedNotification(
+            perf.user.organization || '安恒',
+            perf.user.dingtalk_userid,
+            periodName,
+          );
+        }
+      } catch (err) {
+        console.error(`发送绩效结果通知失败 userId=${perf.user_id}:`, err);
+      }
+    }
+
+    return { count: performances.length, message: `已成功下发 ${performances.length} 条绩效结果` };
   }
 }

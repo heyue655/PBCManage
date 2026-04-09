@@ -31,11 +31,11 @@ VALUES (
   TRUE
 );
 
--- 插入中宇华兴组织钉钉应用配置
+-- 插入耘瓴端组织钉钉应用配置
 INSERT INTO dingtalk_apps (organization, app_name, agent_id, corp_id, app_key, app_secret, is_active) 
 VALUES (
-  '中宇华兴',
-  '中宇华兴PBC管理',
+  '耘瓴端',
+  '耘瓴端PBC管理',
   '4247026873',
   'ding8e18ef801ca2cbda24f2f5cc6abecb85',
   'dingnmpozxqkbpqsor70',

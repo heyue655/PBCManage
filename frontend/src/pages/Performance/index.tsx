@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Select, Space, Tag, Input, DatePicker, Switch, message, Button, Modal, Descriptions } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { Card, Table, Select, Space, Tag, Input, DatePicker, Switch, message, Button, Modal, Descriptions, Popconfirm } from 'antd';
+import { DownloadOutlined, SendOutlined } from '@ant-design/icons';
 import { performanceApi, Performance, UpdatePerformanceDto, pbcApi } from '../../api';
 import { useAuthStore } from '../../store/authStore';
 import type { ColumnsType } from 'antd/es/table';
@@ -47,6 +47,8 @@ const PerformanceList: React.FC = () => {
   const [editValues, setEditValues] = useState<UpdatePerformanceDto>({});
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [distributing, setDistributing] = useState(false);
   const { user: currentUser } = useAuthStore();
 
   // 判断当前用户是否可编辑某条绩效记录
@@ -61,21 +63,16 @@ const PerformanceList: React.FC = () => {
 
   const fetchPeriods = useCallback(async () => {
     try {
-      const list = await pbcApi.getPeriods();
+      const [list, activePeriod] = await Promise.all([
+        pbcApi.getPeriods(),
+        pbcApi.getActivePeriod(),
+      ]);
       setPeriods(list);
-      if (list.length > 0) {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentQuarter = Math.ceil((now.getMonth() + 1) / 3);
-        const currentPeriod = list.find(
-          (p) => p.year === currentYear && p.quarter === currentQuarter,
-        );
-        if (currentPeriod) {
-          setSelectedPeriodId(currentPeriod.period_id);
-        } else {
-          const sorted = [...list].sort((a, b) => b.year - a.year || b.quarter - a.quarter);
-          setSelectedPeriodId(sorted[0].period_id);
-        }
+      if (activePeriod) {
+        setSelectedPeriodId(activePeriod.period_id);
+      } else if (list.length > 0) {
+        const sorted = [...list].sort((a, b) => b.year - a.year || b.quarter - a.quarter);
+        setSelectedPeriodId(sorted[0].period_id);
       }
     } catch {
       // handled
@@ -147,6 +144,21 @@ const PerformanceList: React.FC = () => {
     setEditValues({});
   };
 
+  const handleDistribute = async () => {
+    if (selectedRowKeys.length === 0) return;
+    setDistributing(true);
+    try {
+      const result = await performanceApi.distributeResults(selectedRowKeys);
+      message.success(result.message);
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch (err: any) {
+      message.error(err.response?.data?.message || '下发失败');
+    } finally {
+      setDistributing(false);
+    }
+  };
+
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -195,6 +207,17 @@ const PerformanceList: React.FC = () => {
       render: (_, record) => record.performance_comment || '-',
     },
     {
+      title: '主管评分',
+      key: 'supervisor_overall_score',
+      width: 100,
+      render: (_, record) => {
+        const score = record.evaluation?.supervisor_overall_score;
+        return score != null ? (
+          <span style={{ fontWeight: 700, color: '#52c41a' }}>{score} 分</span>
+        ) : '-';
+      },
+    },
+    {
       title: 'AI维度组织贡献',
       key: 'has_ai_contribution',
       width: 120,
@@ -210,6 +233,15 @@ const PerformanceList: React.FC = () => {
       key: 'bottom_mgmt_status',
       width: 140,
       render: (_, record) => record.bottom_mgmt_status || '-',
+    },
+    {
+      title: '结果下发',
+      key: 'result_distributed_at',
+      width: 110,
+      render: (_, record) =>
+        record.result_distributed_at
+          ? <Tag color="success">已下发</Tag>
+          : <Tag color="default">未下发</Tag>,
     },
     {
       title: '操作',
@@ -348,6 +380,25 @@ const PerformanceList: React.FC = () => {
           >
             导出Excel
           </Button>
+          {currentUser?.role === 'assistant' && (
+            <Popconfirm
+              title={`确定将所选 ${selectedRowKeys.length} 条绩效结果下发给员工？`}
+              description="下发后员工将收到钉钉通知并可查看主管评价"
+              onConfirm={handleDistribute}
+              disabled={selectedRowKeys.length === 0}
+              okText="确认下发"
+              cancelText="取消"
+            >
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                loading={distributing}
+                disabled={selectedRowKeys.length === 0}
+              >
+                下发绩效结果{selectedRowKeys.length > 0 ? `（${selectedRowKeys.length}）` : ''}
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       }
     >
@@ -356,8 +407,20 @@ const PerformanceList: React.FC = () => {
         columns={columns}
         dataSource={data}
         loading={loading}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1250 }}
         pagination={{ pageSize: 20 }}
+        rowSelection={
+          currentUser?.role === 'assistant'
+            ? {
+                selectedRowKeys,
+                onChange: (keys) => setSelectedRowKeys(keys as number[]),
+                getCheckboxProps: (record) => ({
+                  disabled: !!record.result_distributed_at,
+                  title: record.result_distributed_at ? '已下发' : undefined,
+                }),
+              }
+            : undefined
+        }
       />
 
       <Modal

@@ -147,6 +147,7 @@ model PbcEvaluation {
   self_submitted_at          DateTime?
   self_eval_reject_reason    String?          @db.Text
   self_eval_rejected_at      DateTime?
+  supervisor_overall_score   Int?
   supervisor_overall_comment String?          @db.Text
   supervisor_submitted_at    DateTime?
   created_at                 DateTime         @default(now())
@@ -172,6 +173,7 @@ model PbcPerformance {
   ai_performance_comment     String?        @db.Text
   bottom_mgmt_status         String?        @db.VarChar(100)
   planned_elimination_date   DateTime?      @db.Date
+  result_distributed_at      DateTime?
   created_at                 DateTime       @default(now())
   updated_at                 DateTime       @updatedAt
   evaluation                 PbcEvaluation  @relation(fields: [evaluation_id], references: [evaluation_id], onDelete: Cascade)
