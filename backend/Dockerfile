@@ -1,5 +1,5 @@
 # ---- 构建阶段 ----
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,9 @@ COPY . .
 RUN npm run build
 
 # ---- 生产阶段 ----
-FROM node:20-alpine AS production
+FROM docker.das-security.cn/node:22-alpine AS production
+
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
