@@ -4,7 +4,7 @@ services:
   # MySQL 数据库
   # ─────────────────────────────────────────
   mysql:
-    image: mysql:5.7.6
+    image: mysql:5.7.16
     container_name: pbcmanage-mysql
     restart: unless-stopped
     environment:

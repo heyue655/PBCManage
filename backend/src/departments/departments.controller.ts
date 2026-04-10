@@ -24,20 +24,20 @@ export class DepartmentsController {
     return this.departmentsService.findOne(+id);
   }
 
-  // 只有总经理可以创建
+  // 总经理和助理可以创建
   @Post()
   async create(@Request() req: any, @Body() createDepartmentDto: CreateDepartmentDto) {
-    if (req.user.role !== 'gm') {
-      throw new ForbiddenException('只有总经理可以创建部门');
+    if (req.user.role !== 'gm' && req.user.role !== 'assistant') {
+      throw new ForbiddenException('只有总经理和助理可以创建部门');
     }
     return this.departmentsService.create(createDepartmentDto);
   }
 
-  // 只有总经理可以修改
+  // 总经理和助理可以修改
   @Put(':id')
   async update(@Request() req: any, @Param('id') id: string, @Body() updateDepartmentDto: UpdateDepartmentDto) {
-    if (req.user.role !== 'gm') {
-      throw new ForbiddenException('只有总经理可以修改部门');
+    if (req.user.role !== 'gm' && req.user.role !== 'assistant') {
+      throw new ForbiddenException('只有总经理和助理可以修改部门');
     }
     return this.departmentsService.update(+id, updateDepartmentDto);
   }

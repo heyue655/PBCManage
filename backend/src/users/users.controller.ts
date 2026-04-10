@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, Request, Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto } from './dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -27,6 +28,16 @@ export class UsersController {
   @Get('hierarchy')
   async getHierarchy(@Request() req: any) {
     return this.usersService.getHierarchy(req.user.userId);
+  }
+
+  @Get('import-template')
+  async downloadImportTemplate(@Res() res: Response) {
+    const buffer = this.usersService.generateImportTemplate();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename=user_import_template.xlsx',
+    });
+    res.send(buffer);
   }
 
   @Get(':id')

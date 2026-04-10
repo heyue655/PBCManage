@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, Upload, message } from 'antd';
-import { PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 import { usersApi, User, departmentsApi, Department } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -305,10 +305,20 @@ const UserManage: React.FC = () => {
           <ul>
             <li><strong>账号</strong>（必填）</li>
             <li><strong>姓名</strong>（必填）</li>
+            <li>职位</li>
             <li>部门</li>
-            <li>岗位</li>
+            <li>角色（员工/助理/经理/总经理）</li>
+            <li>所属组织（安恒/耘瓴端）</li>
             <li>直属主管（填写姓名）</li>
           </ul>
+          <Button
+            type="link"
+            icon={<DownloadOutlined />}
+            onClick={() => usersApi.downloadImportTemplate()}
+            style={{ padding: 0 }}
+          >
+            下载导入模板
+          </Button>
         </div>
         <Upload
           beforeUpload={() => false}

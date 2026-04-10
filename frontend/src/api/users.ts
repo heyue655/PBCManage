@@ -77,4 +77,19 @@ export const usersApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  downloadImportTemplate: () => {
+    return request.get('/users/import-template', {
+      responseType: 'blob',
+    }).then((blob: any) => {
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', '人员导入模板.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    });
+  },
 };

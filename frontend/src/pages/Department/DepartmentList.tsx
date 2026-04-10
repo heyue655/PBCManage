@@ -13,7 +13,7 @@ const DepartmentList: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
-  const isGM = user?.role === 'gm';
+  const canManage = user?.role === 'gm' || user?.role === 'assistant';
 
   const fetchData = async () => {
     setLoading(true);
@@ -105,7 +105,7 @@ const DepartmentList: React.FC = () => {
     },
   ];
 
-  if (isGM) {
+  if (canManage) {
     columns.push({
       title: '操作',
       key: 'action',
@@ -120,15 +120,17 @@ const DepartmentList: React.FC = () => {
           >
             编辑
           </Button>
-          <Button
-            danger
-            type="link"
-            size="small"
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.department_id)}
-          >
-            删除
-          </Button>
+          {user?.role === 'gm' && (
+            <Button
+              danger
+              type="link"
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record.department_id)}
+            >
+              删除
+            </Button>
+          )}
         </Space>
       ),
     });
@@ -139,7 +141,7 @@ const DepartmentList: React.FC = () => {
       <Card
         title="部门管理"
         extra={
-          isGM && (
+          canManage && (
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
               新增部门
             </Button>

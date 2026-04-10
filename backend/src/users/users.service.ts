@@ -287,6 +287,37 @@ export class UsersService {
     return { message: '删除成功' };
   }
 
+  generateImportTemplate(): Buffer {
+    const templateData = [
+      {
+        '账号': 'zhangsan',
+        '姓名': '张三',
+        '职位': '高级工程师',
+        '部门': '技术部',
+        '角色': '员工',
+        '所属组织': '安恒',
+        '直属主管': '李四',
+      },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.json_to_sheet(templateData);
+
+    // 设置列宽
+    sheet['!cols'] = [
+      { wch: 15 }, // 账号
+      { wch: 10 }, // 姓名
+      { wch: 15 }, // 职位
+      { wch: 15 }, // 部门
+      { wch: 10 }, // 角色
+      { wch: 10 }, // 所属组织
+      { wch: 10 }, // 直属主管
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, sheet, '人员导入模板');
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  }
+
   async importFromExcel(fileBuffer: Buffer) {
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
@@ -326,9 +357,21 @@ export class UsersService {
           });
         }
 
+        // 优先使用显式的角色列，其次从职位推断
         let role = 'employee';
-        if (row['岗位']) {
-          const jobTitle = row['岗位'].toLowerCase();
+        if (row['角色']) {
+          const roleText = row['角色'].trim();
+          const roleMapping: Record<string, string> = {
+            '员工': 'employee',
+            '助理': 'assistant',
+            '经理': 'manager',
+            '总经理': 'gm',
+          };
+          if (roleMapping[roleText]) {
+            role = roleMapping[roleText];
+          }
+        } else if (row['职位'] || row['岗位']) {
+          const jobTitle = (row['职位'] || row['岗位']).toLowerCase();
           if (jobTitle.includes('总经理')) {
             role = 'gm';
           } else if (jobTitle.includes('经理')) {
@@ -338,32 +381,61 @@ export class UsersService {
           }
         }
 
+        const organization = row['所属组织'] || '安恒';
+        const jobTitle = row['职位'] || row['岗位'] || '员工';
+
         const existingUser = await this.prisma.user.findUnique({
           where: { username: row['账号'] },
         });
 
         if (existingUser) {
+          // 根据姓名和组织自动查询钉钉userid
+          let dingtalkUserId: string | null = existingUser.dingtalk_userid;
+          const nameChanged = row['姓名'] !== existingUser.real_name;
+          const orgChanged = organization !== existingUser.organization;
+          if (nameChanged || orgChanged) {
+            try {
+              const searchResult = await this.dingtalkService.searchUserIdByName(organization, row['姓名']);
+              dingtalkUserId = searchResult || null;
+            } catch {
+              // 查询失败保留原值
+            }
+          }
+
           await this.prisma.user.update({
             where: { user_id: existingUser.user_id },
             data: {
               real_name: row['姓名'],
-              job_title: row['岗位'] || existingUser.job_title,
+              job_title: jobTitle,
               department_id: department?.department_id || existingUser.department_id,
               supervisor_id: supervisor?.user_id || existingUser.supervisor_id,
               role: role as any,
+              organization: organization,
+              dingtalk_userid: dingtalkUserId,
             },
           });
         } else {
+          // 根据姓名和组织自动查询钉钉userid
+          let dingtalkUserId: string | null = null;
+          try {
+            const searchResult = await this.dingtalkService.searchUserIdByName(organization, row['姓名']);
+            dingtalkUserId = searchResult || null;
+          } catch {
+            // 查询失败不影响导入
+          }
+
           const hashedPassword = await bcrypt.hash('123456', 10);
           await this.prisma.user.create({
             data: {
               username: row['账号'],
               password: hashedPassword,
               real_name: row['姓名'],
-              job_title: row['岗位'] || '员工',
+              job_title: jobTitle,
               department_id: department?.department_id,
               supervisor_id: supervisor?.user_id,
               role: role as any,
+              organization: organization,
+              dingtalk_userid: dingtalkUserId,
             },
           });
         }
