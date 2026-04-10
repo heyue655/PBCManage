@@ -70,8 +70,12 @@ export class AuthService {
     console.log('✅ 登录成功!');
     console.log('=== 登录请求结束 ===\n');
 
+    // 检测是否使用默认密码登录
+    const isDefaultPassword = password === '123456';
+
     return {
       access_token: token,
+      needResetPassword: isDefaultPassword,
       user: {
         user_id: user.user_id,
         username: user.username,

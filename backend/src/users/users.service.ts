@@ -205,6 +205,16 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
+    // 如果修改了用户名，检查唯一性
+    if (updateUserDto.username && updateUserDto.username !== user.username) {
+      const existing = await this.prisma.user.findUnique({
+        where: { username: updateUserDto.username },
+      });
+      if (existing) {
+        throw new BadRequestException('用户名已存在');
+      }
+    }
+
     // 如果姓名或组织发生变化，重新查询钉钉userid
     let shouldUpdateDingtalkUserId = false; // 标记是否需要更新userid字段
     let dingtalkUserId: string | null = updateUserDto.dingtalk_userid || null;

@@ -940,11 +940,31 @@ export class PbcService {
           where: { user_id_period_id: { user_id: userId, period_id: periodId } },
           create: { user_id: userId, period_id: periodId, distributed_by: distributorId },
           update: { distributed_by: distributorId },
-          include: { user: { select: { user_id: true, real_name: true } }, period: true },
+          include: { user: { select: { user_id: true, real_name: true, dingtalk_userid: true, organization: true } }, period: true },
         });
         results.push(task);
       } catch {
         errors.push(userId);
+      }
+    }
+
+    // 发送钉钉通知给被下发任务的人员
+    const periodName = `${period.year}年第${period.quarter}季度`;
+    for (const task of results) {
+      try {
+        if (task.user?.dingtalk_userid) {
+          await this.dingtalkService.sendWorkNotification(
+            task.user.organization || '安恒',
+            [task.user.dingtalk_userid],
+            {
+              title: 'PBC任务下发通知',
+              text: `您已收到 ${periodName} 的PBC任务，请登录系统填写您的PBC目标。\n系统地址：http://10.20.120.147`,
+            },
+          );
+        }
+      } catch (error) {
+        console.error(`发送钉钉通知失败(用户${task.user?.real_name}):`, error);
+        // 通知失败不影响主流程
       }
     }
 

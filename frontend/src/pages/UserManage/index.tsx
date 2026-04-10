@@ -318,7 +318,7 @@ const UserManage: React.FC = () => {
             label="用户名（登录账号）"
             rules={[{ required: true, message: '请输入用户名' }]}
           >
-            <Input placeholder="请输入用户名" disabled={!!editingUser} />
+            <Input placeholder="请输入用户名" />
           </Form.Item>
           <Form.Item
             name="real_name"

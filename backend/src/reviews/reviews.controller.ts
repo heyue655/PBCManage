@@ -13,7 +13,9 @@ export class ReviewsController {
   async getPendingCount(@Request() req: any) {
     const pending = await this.reviewsService.getPendingReviews(req.user.userId);
     const pendingEvals = await this.reviewsService.getPendingEvaluations(req.user.userId);
-    return { count: pending.length + pendingEvals.length };
+    // 按员工+周期分组计数（与前端ReviewList展示一致）
+    const groupKeys = new Set(pending.map((g: any) => `${g.user_id}-${g.period_id}`));
+    return { count: groupKeys.size + pendingEvals.length };
   }
 
   // 获取待审核列表

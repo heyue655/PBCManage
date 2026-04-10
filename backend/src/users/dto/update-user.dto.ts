@@ -4,6 +4,10 @@ import { UserRole } from '../../entities';
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
+  username?: string;
+
+  @IsOptional()
+  @IsString()
   real_name?: string;
 
   @IsOptional()

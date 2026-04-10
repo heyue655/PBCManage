@@ -7,6 +7,7 @@ export interface LoginParams {
 
 export interface LoginResult {
   access_token: string;
+  needResetPassword?: boolean;
   user: {
     user_id: number;
     username: string;
