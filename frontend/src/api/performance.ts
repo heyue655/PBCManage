@@ -50,6 +50,11 @@ export const performanceApi = {
     return request.get('/performance', { params: periodId ? { periodId } : {} });
   },
 
+  // 获取我的绩效（已下发的）
+  getMine: (): Promise<Performance[]> => {
+    return request.get('/performance/mine');
+  },
+
   // 获取单条绩效
   getOne: (id: number): Promise<Performance> => {
     return request.get(`/performance/${id}`);

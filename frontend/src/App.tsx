@@ -15,6 +15,7 @@ import ChangePassword from './pages/ChangePassword';
 import { DepartmentList } from './pages/Department';
 import DingtalkAppManage from './pages/DingtalkAppManage';
 import PerformanceList from './pages/Performance';
+import MyPerformance from './pages/MyPerformance';
 
 // 路由守卫组件
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -115,6 +116,9 @@ const App: React.FC = () => {
             }
           />
           
+          {/* 我的绩效 - 所有角色 */}
+          <Route path="my-performance" element={<MyPerformance />} />
+
           {/* 绩效管理 - 经理、助理、总经理 */}
           <Route
             path="performance"

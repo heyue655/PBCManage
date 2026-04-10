@@ -530,7 +530,7 @@ export class PbcService {
   // 查看团队目标（按人员和季度展示所有非草稿状态的目标）
   async getTeamGoals(currentUserId: number, periodId?: number) {
     console.log('\n=== 查询团队目标 ===');
-    console.log('当前用户ID:', currentUserId, '周期ID:', periodId);
+    // console.log('当前用户ID:', currentUserId, '周期ID:', periodId);
 
     const currentUser = await this.prisma.user.findUnique({
       where: { user_id: currentUserId },
@@ -541,7 +541,7 @@ export class PbcService {
       throw new NotFoundException('当前用户不存在');
     }
 
-    console.log('用户:', currentUser.real_name, '角色:', currentUser.role, '部门ID:', currentUser.department_id);
+    // console.log('用户:', currentUser.real_name, '角色:', currentUser.role, '部门ID:', currentUser.department_id);
 
     const where: any = {
       parent_goal_id: null, // 只查主目标
@@ -570,7 +570,7 @@ export class PbcService {
         where: { department_id: currentUser.department_id },
         select: { user_id: true, real_name: true },
       });
-      console.log('   本部门用户:', deptUsers.map(u => u.real_name).join(', '));
+      // console.log('   本部门用户:', deptUsers.map(u => u.real_name).join(', '));
       
       const userIds = deptUsers.map(u => u.user_id);
       if (userIds.length === 0) {
@@ -591,13 +591,13 @@ export class PbcService {
       const { DepartmentsService } = await import('../departments/departments.service');
       const deptService = new DepartmentsService(this.prisma);
       const departmentIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
-      console.log('   部门ID列表（含子部门）:', departmentIds);
+      // console.log('   部门ID列表（含子部门）:', departmentIds);
       
       const deptUsers = await this.prisma.user.findMany({
         where: { department_id: { in: departmentIds } },
         select: { user_id: true, real_name: true },
       });
-      console.log('   部门用户:', deptUsers.map(u => u.real_name).join(', '));
+      // console.log('   部门用户:', deptUsers.map(u => u.real_name).join(', '));
       
       const userIds = deptUsers.map(u => u.user_id);
       if (userIds.length === 0) {
@@ -642,10 +642,35 @@ export class PbcService {
       : [];
 
     const evalMap = new Map(evaluations.map(e => [`${e.user_id}_${e.period_id}`, e]));
-    const goalsWithEval = results.map(g => ({
-      ...g,
-      evaluation: evalMap.get(`${g.user_id}_${g.period_id}`) ?? null,
-    }));
+
+    // 获取当前用户的直接下属ID列表，用于判断是否可查看自评
+    const directSubordinates = await this.prisma.user.findMany({
+      where: { supervisor_id: currentUserId },
+      select: { user_id: true },
+    });
+    const directSubIds = new Set(directSubordinates.map(s => s.user_id));
+
+    const goalsWithEval = results.map(g => {
+      const isDirectSub = directSubIds.has(g.user_id);
+      const evaluation = evalMap.get(`${g.user_id}_${g.period_id}`) ?? null;
+
+      // 跨级主管：隐藏自评数据
+      if (!isDirectSub && g.user_id !== currentUserId) {
+        const maskedEval = evaluation ? {
+          ...evaluation,
+          self_overall_comment: null,
+          self_submitted_at: null,
+        } : null;
+        return {
+          ...g,
+          self_score: null,
+          self_comment: null,
+          evaluation: maskedEval,
+        };
+      }
+
+      return { ...g, evaluation };
+    });
 
     console.log('✅ 查询结果数量:', results.length);
     console.log('=== 查询团队目标结束 ===\n');
@@ -734,7 +759,7 @@ export class PbcService {
   }
 
   // 获取评价信息
-  async getEvaluation(userId: number, periodId: number) {
+  async getEvaluation(userId: number, periodId: number, requesterId?: number) {
     const evaluation = await this.prisma.pbcEvaluation.findUnique({
       where: {
         user_id_period_id: {
@@ -767,6 +792,33 @@ export class PbcService {
         created_at: 'asc',
       },
     });
+
+    // 判断请求者是否为该员工的直接主管
+    let isDirectSupervisor = true;
+    if (requesterId && requesterId !== userId) {
+      const targetUser = await this.prisma.user.findUnique({
+        where: { user_id: userId },
+        select: { supervisor_id: true },
+      });
+      isDirectSupervisor = targetUser?.supervisor_id === requesterId;
+    }
+
+    // 跨级主管：隐藏自评数据
+    if (!isDirectSupervisor) {
+      const maskedEvaluation = evaluation ? {
+        ...evaluation,
+        self_overall_comment: null,
+        self_submitted_at: null,
+      } : null;
+
+      const maskedGoals = goals.map(g => ({
+        ...g,
+        self_score: null,
+        self_comment: null,
+      }));
+
+      return { evaluation: maskedEvaluation, goals: maskedGoals };
+    }
 
     return {
       evaluation,

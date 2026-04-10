@@ -162,7 +162,7 @@ const TeamGoals: React.FC = () => {
     setSearchName(value);
   };
 
-  // 查看自评
+  // 查看评价
   const handleViewEvaluation = async (userId: number, periodId: number) => {
     try {
       const data = await pbcApi.getEvaluation(userId, periodId);
@@ -304,17 +304,15 @@ const TeamGoals: React.FC = () => {
             >
               查看目标
             </Button>
-            {hasSelfEvaluation ? (
+            {hasSelfEvaluation && (
               <Button
                 type="link"
                 size="small"
                 icon={<EyeOutlined />}
                 onClick={() => handleViewEvaluation(record.userId, record.periodId)}
               >
-                查看自评
+                查看评价
               </Button>
-            ) : (
-              <span style={{ color: '#999', fontSize: 12 }}>待自评</span>
             )}
           </Space>
         );
@@ -579,9 +577,9 @@ const TeamGoals: React.FC = () => {
         )}
       </Modal>
 
-      {/* 查看自评模态框 */}
+      {/* 查看评价模态框 */}
       <Modal
-        title="查看自评与评价"
+        title="查看评价与评价"
         open={evaluationModalVisible}
         onCancel={() => {
           setEvaluationModalVisible(false);

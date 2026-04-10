@@ -67,6 +67,12 @@ const MainLayout: React.FC = () => {
         roles: ['employee', 'manager', 'assistant', 'gm'], // 所有角色
       },
       {
+        key: '/my-performance',
+        icon: <TrophyOutlined />,
+        label: '我的绩效',
+        roles: ['employee', 'manager', 'assistant', 'gm'], // 所有角色
+      },
+      {
         key: '/review',
         icon: <AuditOutlined />,
         label: pendingCount > 0

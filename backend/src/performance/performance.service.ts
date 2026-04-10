@@ -11,11 +11,39 @@ export class PerformanceService {
     private dingtalkService: DingtalkService,
   ) {}
 
-  // 查询绩效列表（按季度筛选）
-  async getPerformances(periodId?: number) {
+  // 查询绩效列表（按季度筛选 + 权限过滤）
+  async getPerformances(periodId?: number, currentUserId?: number) {
     const where: any = {};
     if (periodId) {
       where.period_id = periodId;
+    }
+
+    // 权限过滤
+    if (currentUserId) {
+      const currentUser = await this.prisma.user.findUnique({
+        where: { user_id: currentUserId },
+      });
+
+      if (currentUser) {
+        if (currentUser.role === 'employee') {
+          // 普通员工只能看自己的已下发绩效
+          where.user_id = currentUserId;
+          where.result_distributed_at = { not: null };
+        } else if (currentUser.role === 'manager') {
+          // 经理只能看本部门的
+          if (currentUser.department_id) {
+            where.user = { department_id: currentUser.department_id };
+          }
+        } else if (currentUser.role === 'assistant' || currentUser.role === 'gm') {
+          // 助理和总经理可以看所属部门及所有子部门
+          if (currentUser.department_id) {
+            const { DepartmentsService } = await import('../departments/departments.service');
+            const deptService = new DepartmentsService(this.prisma);
+            const departmentIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
+            where.user = { department_id: { in: departmentIds } };
+          }
+        }
+      }
     }
 
     return this.prisma.pbcPerformance.findMany({
@@ -31,6 +59,27 @@ export class PerformanceService {
         { period: { year: 'desc' } },
         { period: { quarter: 'desc' } },
         { user: { real_name: 'asc' } },
+      ],
+    });
+  }
+
+  // 查询当前用户的绩效（仅已下发的）
+  async getMyPerformances(userId: number) {
+    return this.prisma.pbcPerformance.findMany({
+      where: {
+        user_id: userId,
+        result_distributed_at: { not: null },
+      },
+      include: {
+        user: {
+          include: { department: true },
+        },
+        period: true,
+        evaluation: true,
+      },
+      orderBy: [
+        { period: { year: 'desc' } },
+        { period: { quarter: 'desc' } },
       ],
     });
   }
@@ -101,8 +150,8 @@ export class PerformanceService {
   }
 
   // 导出绩效为Excel
-  async exportToExcel(periodId?: number): Promise<Buffer> {
-    const list = await this.getPerformances(periodId);
+  async exportToExcel(periodId?: number, currentUserId?: number): Promise<Buffer> {
+    const list = await this.getPerformances(periodId, currentUserId);
 
     const rows = list.map((item: any) => ({
       '姓名': item.user?.real_name || '',

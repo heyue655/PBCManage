@@ -327,9 +327,12 @@ export class ReviewsService {
     });
   }
 
-  // 获取待评价列表（员工已提交自评，主管未评价）
+  // 获取待评价列表（员工已提交自评，主管未评价）——仅直接下属
   async getPendingEvaluations(supervisorId: number) {
-    const allSubordinateIds = await this.getAllSubordinateIds(supervisorId);
+    const directSubordinates = await this.prisma.user.findMany({
+      where: { supervisor_id: supervisorId },
+    });
+    const allSubordinateIds = directSubordinates.map(s => s.user_id);
     if (allSubordinateIds.length === 0) return [];
 
     const evaluations = await this.prisma.pbcEvaluation.findMany({

@@ -182,8 +182,9 @@ export class PbcController {
   async getEvaluation(
     @Param('userId') userId: string,
     @Param('periodId') periodId: string,
+    @Request() req: any,
   ) {
-    return this.pbcService.getEvaluation(+userId, +periodId);
+    return this.pbcService.getEvaluation(+userId, +periodId, req.user.userId);
   }
 
   // 主管评价单个目标
