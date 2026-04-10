@@ -16,8 +16,17 @@ export class UsersController {
     @Request() req: any,
     @Query('departmentId') departmentId?: string,
     @Query('role') role?: UserRole,
+    @Query('realName') realName?: string,
+    @Query('jobTitle') jobTitle?: string,
+    @Query('organization') organization?: string,
   ) {
-    return this.usersService.findAll(req.user.userId, { departmentId: departmentId ? +departmentId : undefined, role });
+    return this.usersService.findAll(req.user.userId, {
+      departmentId: departmentId ? +departmentId : undefined,
+      role,
+      realName,
+      jobTitle,
+      organization,
+    });
   }
 
   @Get('me')

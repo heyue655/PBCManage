@@ -15,6 +15,11 @@ export interface ApprovalRecord {
 }
 
 export const reviewsApi = {
+  // 获取待审核数量（用于菜单角标）
+  getPendingCount: (): Promise<{ count: number }> => {
+    return request.get('/reviews/pending-count');
+  },
+
   // 获取待审核列表
   getPending: (): Promise<PbcGoal[]> => {
     return request.get('/reviews/pending');

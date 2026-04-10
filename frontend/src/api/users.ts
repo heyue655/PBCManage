@@ -38,7 +38,7 @@ export interface ImportResult {
 }
 
 export const usersApi = {
-  getAll: (params?: { departmentId?: number; role?: string }): Promise<User[]> => {
+  getAll: (params?: { departmentId?: number; role?: string; realName?: string; jobTitle?: string; organization?: string }): Promise<User[]> => {
     return request.get('/users', { params });
   },
 

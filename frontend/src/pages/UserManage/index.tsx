@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, Upload, message } from 'antd';
-import { PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, Upload, message, Row, Col } from 'antd';
+import { PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { usersApi, User, departmentsApi, Department } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -22,11 +22,20 @@ const UserManage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [importing, setImporting] = useState(false);
+  const [searchName, setSearchName] = useState('');
+  const [searchDept, setSearchDept] = useState<number | undefined>(undefined);
+  const [searchJobTitle, setSearchJobTitle] = useState('');
+  const [searchOrg, setSearchOrg] = useState<string | undefined>(undefined);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const users = await usersApi.getAll();
+      const users = await usersApi.getAll({
+        realName: searchName || undefined,
+        departmentId: searchDept,
+        jobTitle: searchJobTitle || undefined,
+        organization: searchOrg,
+      });
       setData(users);
     } catch {
       // 错误已处理
@@ -48,6 +57,26 @@ const UserManage: React.FC = () => {
     fetchData();
     fetchDepartments();
   }, []);
+
+  const handleSearch = () => {
+    fetchData();
+  };
+
+  const handleReset = async () => {
+    setSearchName('');
+    setSearchDept(undefined);
+    setSearchJobTitle('');
+    setSearchOrg(undefined);
+    setLoading(true);
+    try {
+      const users = await usersApi.getAll();
+      setData(users);
+    } catch {
+      // 错误已处理
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreate = () => {
     setEditingUser(null);
@@ -209,6 +238,65 @@ const UserManage: React.FC = () => {
         </Space>
       }
     >
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col>
+          <Input
+            placeholder="姓名"
+            value={searchName}
+            onChange={(e) => setSearchName(e.target.value)}
+            style={{ width: 140 }}
+            allowClear
+            onPressEnter={handleSearch}
+          />
+        </Col>
+        <Col>
+          <Select
+            placeholder="部门"
+            value={searchDept}
+            onChange={(v) => setSearchDept(v)}
+            style={{ width: 160 }}
+            allowClear
+            showSearch
+            optionFilterProp="children"
+          >
+            {departments.map((dept) => (
+              <Select.Option key={dept.department_id} value={dept.department_id}>
+                {dept.department_name}
+              </Select.Option>
+            ))}
+          </Select>
+        </Col>
+        <Col>
+          <Input
+            placeholder="职位"
+            value={searchJobTitle}
+            onChange={(e) => setSearchJobTitle(e.target.value)}
+            style={{ width: 140 }}
+            allowClear
+            onPressEnter={handleSearch}
+          />
+        </Col>
+        <Col>
+          <Select
+            placeholder="所属组织"
+            value={searchOrg}
+            onChange={(v) => setSearchOrg(v)}
+            style={{ width: 130 }}
+            allowClear
+          >
+            <Select.Option value="安恒">安恒</Select.Option>
+            <Select.Option value="耘瓴端">耘瓴端</Select.Option>
+          </Select>
+        </Col>
+        <Col>
+          <Space>
+            <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
+              查询
+            </Button>
+            <Button onClick={handleReset}>重置</Button>
+          </Space>
+        </Col>
+      </Row>
       <Table
         columns={columns}
         dataSource={data}

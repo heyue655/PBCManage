@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Dropdown, Avatar, Space, message } from 'antd';
+import { Layout, Menu, Dropdown, Avatar, Space, message, Badge } from 'antd';
 import {
   FormOutlined,
   AuditOutlined,
@@ -15,15 +15,36 @@ import {
   TrophyOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
-import { authApi } from '../api';
+import { authApi, reviewsApi } from '../api';
 
 const { Header, Sider, Content } = Layout;
 
 const MainLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+
+  // 获取待审核数量
+  const fetchPendingCount = async () => {
+    const userRole = user?.role || 'employee';
+    if (['manager', 'assistant', 'gm'].includes(userRole)) {
+      try {
+        const result = await reviewsApi.getPendingCount();
+        setPendingCount(result.count);
+      } catch {
+        // 忽略错误
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingCount();
+    // 每60秒刷新一次
+    const timer = setInterval(fetchPendingCount, 60000);
+    return () => clearInterval(timer);
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -46,10 +67,12 @@ const MainLayout: React.FC = () => {
         roles: ['employee', 'manager', 'assistant', 'gm'], // 所有角色
       },
       {
-        key: '/distribute-task',
-        icon: <DeploymentUnitOutlined />,
-        label: '下发任务',
-        roles: ['assistant', 'gm'], // 仅助理、总经理
+        key: '/review',
+        icon: <AuditOutlined />,
+        label: pendingCount > 0
+          ? <span>审核管理<Badge count={pendingCount} size="small" style={{ marginLeft: 8 }} /></span>
+          : '审核管理',
+        roles: ['manager', 'assistant', 'gm'], // 经理、助理、总经理
       },
       {
         key: '/team-goals',
@@ -58,10 +81,16 @@ const MainLayout: React.FC = () => {
         roles: ['manager', 'assistant', 'gm'], // 经理、助理、总经理
       },
       {
-        key: '/review',
-        icon: <AuditOutlined />,
-        label: '审核管理',
+        key: '/performance',
+        icon: <TrophyOutlined />,
+        label: '绩效管理',
         roles: ['manager', 'assistant', 'gm'], // 经理、助理、总经理
+      },
+      {
+        key: '/distribute-task',
+        icon: <DeploymentUnitOutlined />,
+        label: '下发任务',
+        roles: ['assistant', 'gm'], // 仅助理、总经理
       },
       {
         key: '/users',
@@ -74,12 +103,6 @@ const MainLayout: React.FC = () => {
         icon: <TeamOutlined />,
         label: '部门管理',
         roles: ['assistant', 'gm'], // 助理、总经理
-      },
-      {
-        key: '/performance',
-        icon: <TrophyOutlined />,
-        label: '绩效管理',
-        roles: ['manager', 'assistant', 'gm'], // 经理、助理、总经理
       },
       {
         key: '/dingtalk-apps',

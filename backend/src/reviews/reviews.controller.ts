@@ -8,6 +8,14 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class ReviewsController {
   constructor(private reviewsService: ReviewsService) {}
 
+  // 获取待审核数量（用于菜单角标）
+  @Get('pending-count')
+  async getPendingCount(@Request() req: any) {
+    const pending = await this.reviewsService.getPendingReviews(req.user.userId);
+    const pendingEvals = await this.reviewsService.getPendingEvaluations(req.user.userId);
+    return { count: pending.length + pendingEvals.length };
+  }
+
   // 获取待审核列表
   @Get('pending')
   async getPendingReviews(@Request() req: any) {

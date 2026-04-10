@@ -12,7 +12,7 @@ export class UsersService {
     private dingtalkService: DingtalkService,
   ) {}
 
-  async findAll(currentUserId: number, query: { departmentId?: number; role?: string }) {
+  async findAll(currentUserId: number, query: { departmentId?: number; role?: string; realName?: string; jobTitle?: string; organization?: string }) {
     // 先获取当前用户信息
     const currentUser = await this.prisma.user.findUnique({
       where: { user_id: currentUserId },
@@ -51,6 +51,18 @@ export class UsersService {
     
     if (query.role) {
       where.role = query.role;
+    }
+
+    if (query.realName) {
+      where.real_name = { contains: query.realName };
+    }
+
+    if (query.jobTitle) {
+      where.job_title = { contains: query.jobTitle };
+    }
+
+    if (query.organization) {
+      where.organization = query.organization;
     }
 
     const users = await this.prisma.user.findMany({
