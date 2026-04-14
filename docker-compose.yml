@@ -45,6 +45,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-pbc_manage}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://pbc.das-security.cn}
     networks:
       - pbcmanage-network
     # 后端仅对内部网络暴露，不直接对外（通过 Nginx 代理）

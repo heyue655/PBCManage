@@ -4,6 +4,10 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const corsOriginsFromEnv = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
   
   // 全局验证管道
   app.useGlobalPipes(new ValidationPipe({
@@ -11,19 +15,26 @@ async function bootstrap() {
     transform: true,
   }));
   
-  // 启用CORS - 支持localhost和局域网IP访问
+  // 启用 CORS：默认支持本地/内网，同时允许通过 CORS_ORIGINS 扩展生产域名
   app.enableCors({
     origin: (origin, callback) => {
-      // 允许的来源：localhost、127.0.0.1、局域网IP（192.168.x.x、10.x.x.x等）
-      // 开发环境允许所有来源，生产环境应该配置具体的域名
-      const allowedOrigins = [
+      const allowedOrigins: Array<string | RegExp> = [
         'http://localhost:3000',
         'http://localhost',
+        'https://localhost:3000',
+        'https://localhost',
         'http://127.0.0.1:3000',
         'http://127.0.0.1',
+        'https://127.0.0.1:3000',
+        'https://127.0.0.1',
+        'https://pbc.das-security.cn',
         /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,  // 192.168.x.x
         /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,  // 10.x.x.x
         /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}(:\d+)?$/,  // 172.16.x.x-172.31.x.x
+        /^https:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,  // https 192.168.x.x
+        /^https:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,  // https 10.x.x.x
+        /^https:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}(:\d+)?$/,  // https 172.16.x.x-172.31.x.x
+        ...corsOriginsFromEnv,
       ];
       
       // 如果没有origin（例如postman等工具），允许访问
