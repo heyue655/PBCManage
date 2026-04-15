@@ -1019,7 +1019,7 @@ export class PbcService {
             [task.user.dingtalk_userid],
             {
               title: 'PBC任务下发通知',
-              text: `您已收到 ${periodName} 的PBC任务，请登录系统填写您的PBC目标。\n系统地址：http://10.20.120.147`,
+              text: `您已收到 ${periodName} 的PBC任务，请登录系统填写您的PBC目标。\n系统地址：https://pbc.das-security.cn`,
             },
           );
         }
