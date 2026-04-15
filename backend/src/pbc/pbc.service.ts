@@ -502,7 +502,7 @@ export class PbcService {
       user_id: user.supervisor_id,
       goal_type: 'business', // 查询上级的业务目标（原"个人业务目标"）
       parent_goal_id: null,
-      status: 'approved', // 只返回已审核通过的目标
+      // 返回所有状态的目标（含草稿、待审核、已通过等）
     };
 
     if (periodId) {

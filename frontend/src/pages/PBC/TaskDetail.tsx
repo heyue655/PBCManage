@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Button, Tag, Space, Spin, Alert, Descriptions, Divider,
-  Modal, Form, Input, InputNumber, Select, message, Popconfirm, Progress, Row, Col,
+  Modal, Form, Input, InputNumber, Select, message, Popconfirm, Progress, Row, Col, Typography,
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined,
-  SendOutlined, StarOutlined,
+  SendOutlined, StarOutlined, LinkOutlined,
 } from '@ant-design/icons';
 import { pbcApi, PbcTask, PbcGoal, PbcStatus } from '../../api';
 import { useAuthStore } from '../../store/authStore';
@@ -80,6 +80,7 @@ const TaskDetail: React.FC = () => {
   const [editingGoal, setEditingGoal] = useState<PbcGoal | null>(null);
   const [goalForm] = Form.useForm();
   const [supervisorGoals, setSupervisorGoals] = useState<PbcGoal[]>([]);
+  const [selectedSupervisorGoal, setSelectedSupervisorGoal] = useState<PbcGoal | undefined>();
 
   // 内联自评
   const [evalInputs, setEvalInputs] = useState<Record<number, { score?: number; comment: string }>>({}); 
@@ -128,6 +129,7 @@ const TaskDetail: React.FC = () => {
   // 打开目标表单
   const openGoalModal = async (goal?: PbcGoal) => {
     setEditingGoal(goal || null);
+    setSelectedSupervisorGoal(undefined);
     goalForm.resetFields();
     if (goal) {
       goalForm.setFieldsValue({
@@ -153,6 +155,12 @@ const TaskDetail: React.FC = () => {
     try {
       const sg = await pbcApi.getSupervisorGoals(task?.period_id);
       setSupervisorGoals(sg);
+      // 如果是编辑模式，回显已选上级目标的详情
+      if (goal?.supervisor_goal_id) {
+        const found = sg.find(g => g.goal_id === goal.supervisor_goal_id);
+        if (found) setSelectedSupervisorGoal(found);
+        else if ((goal as any).supervisorGoal) setSelectedSupervisorGoal((goal as any).supervisorGoal);
+      }
     } catch {
       setSupervisorGoals([]);
     }
@@ -384,7 +392,7 @@ const TaskDetail: React.FC = () => {
                 ) : null
               }
             >
-              <Descriptions column={1} size="small" bordered>
+              <Descriptions column={1} size="small" bordered labelStyle={{ width: 110, whiteSpace: 'nowrap' }}>
                 <Descriptions.Item label="性质">{goalNatureMap[(goal as any).goal_nature] || '-'}</Descriptions.Item>
                 {goal.goal_type !== 'skill' && goal.measures && (
                     <Descriptions.Item label="实现举措"><MultilineText text={goal.measures} /></Descriptions.Item>
@@ -572,10 +580,10 @@ const TaskDetail: React.FC = () => {
         title={editingGoal ? '编辑目标' : '添加目标'}
         open={goalModalVisible}
         onOk={handleGoalSubmit}
-        onCancel={() => { setGoalModalVisible(false); goalForm.resetFields(); }}
+        onCancel={() => { setGoalModalVisible(false); goalForm.resetFields(); setSelectedSupervisorGoal(undefined); }}
         okText="保存"
         cancelText="取消"
-        width={700}
+        width={760}
       >
         <Form
           form={goalForm}
@@ -583,44 +591,123 @@ const TaskDetail: React.FC = () => {
           onValuesChange={(changedValues) => {
             if (changedValues.goal_type !== undefined) {
               goalForm.setFieldValue('goal_nature', getDefaultGoalNature(changedValues.goal_type));
+              if (changedValues.goal_type !== 'business') {
+                goalForm.setFieldValue('supervisor_goal_id', undefined);
+                setSelectedSupervisorGoal(undefined);
+              }
+            }
+            if (changedValues.supervisor_goal_id !== undefined) {
+              const found = supervisorGoals.find(g => g.goal_id === changedValues.supervisor_goal_id);
+              setSelectedSupervisorGoal(found);
             }
           }}
         >
-          <Form.Item name="goal_type" label="目标类型" rules={[{ required: true }]}>
-            <Select placeholder="选择目标类型">
-              {Object.entries(goalTypeMap).map(([k, v]) => (
-                <Select.Option key={k} value={k}>{v}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="goal_nature" label="性质" rules={[{ required: true, message: '请选择性质' }]}>
-            <Select placeholder="选择性质">
-              <Select.Option value="qualitative">定性</Select.Option>
-              <Select.Option value="quantitative">定量</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="goal_name" label="目标名称" rules={[{ required: true, message: '请输入目标名称' }]}>
-            <Input placeholder="请输入目标名称" />
-          </Form.Item>
-          <Form.Item
-            name="goal_weight"
-            label="权重（%）"
-            rules={[
-              { required: true, message: '请输入权重' },
-              { type: 'number', min: 1, max: 100, message: '权重范围：1-100' },
-            ]}
-          >
-            <InputNumber style={{ width: '100%' }} placeholder="请输入1-100的整数" min={1} max={100} />
-          </Form.Item>
-          {currentGoalType === 'business' && supervisorGoals.length > 0 && (
-            <Form.Item name="supervisor_goal_id" label="关联上级目标">
-              <Select placeholder="选择关联的上级业务目标" allowClear>
+          {/* 第一行：目标类型、性质 */}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="goal_type" label="目标类型" rules={[{ required: true }]}>
+                <Select placeholder="选择目标类型">
+                  {Object.entries(goalTypeMap).map(([k, v]) => (
+                    <Select.Option key={k} value={k}>{v}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="goal_nature" label="性质" rules={[{ required: true, message: '请选择性质' }]}>
+                <Select placeholder="选择性质">
+                  <Select.Option value="qualitative">定性</Select.Option>
+                  <Select.Option value="quantitative">定量</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* 第二行：目标名称、权重 */}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="goal_name" label="目标名称" rules={[{ required: true, message: '请输入目标名称' }]}>
+                <Input placeholder="请输入目标名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="goal_weight"
+                label="权重（%）"
+                rules={[
+                  { required: true, message: '请输入权重' },
+                  { type: 'number', min: 1, max: 100, message: '权重范围：1-100' },
+                ]}
+              >
+                <InputNumber style={{ width: '100%' }} placeholder="请输入1-100的整数" min={1} max={100} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* 关联上级业务目标（仅业务目标时显示） */}
+          {currentGoalType === 'business' && (
+            <Form.Item
+              name="supervisor_goal_id"
+              label="关联上级业务目标"
+              extra={supervisorGoals.length === 0 ? <Typography.Text type="secondary" style={{ fontSize: 12 }}>当前周期上级暂无业务目标</Typography.Text> : undefined}
+            >
+              <Select
+                placeholder={supervisorGoals.length > 0 ? "可关联上级当季业务目标（可选）" : "暂无可关联目标"}
+                allowClear
+                disabled={supervisorGoals.length === 0}
+                optionLabelProp="label"
+              >
                 {supervisorGoals.map(sg => (
-                  <Select.Option key={sg.goal_id} value={sg.goal_id}>{sg.goal_name}</Select.Option>
+                  <Select.Option key={sg.goal_id} value={sg.goal_id} label={sg.goal_name}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 500 }}>{sg.goal_name}</div>
+                        {sg.goal_description && (
+                          <div style={{ fontSize: 12, color: '#888', whiteSpace: 'normal', lineHeight: '1.4' }}>
+                            {sg.goal_description.length > 60 ? sg.goal_description.slice(0, 60) + '…' : sg.goal_description}
+                          </div>
+                        )}
+                      </div>
+                      <Tag
+                        color={sg.status === 'approved' ? 'success' : sg.status === 'submitted' ? 'processing' : sg.status === 'rejected' ? 'error' : 'default'}
+                        style={{ marginTop: 2, flexShrink: 0 }}
+                      >
+                        {statusMap[sg.status as PbcStatus]?.text || sg.status}
+                      </Tag>
+                    </div>
+                  </Select.Option>
                 ))}
               </Select>
             </Form.Item>
           )}
+
+          {/* 选中上级目标后展示详情 */}
+          {currentGoalType === 'business' && selectedSupervisorGoal && (
+            <Card
+              size="small"
+              style={{ marginBottom: 16, background: '#f6ffed', border: '1px solid #b7eb8f' }}
+              title={
+                <Space>
+                  <LinkOutlined style={{ color: '#52c41a' }} />
+                  <Typography.Text style={{ fontSize: 13 }}>已关联上级目标</Typography.Text>
+                </Space>
+              }
+            >
+              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                <div>
+                  <Typography.Text strong>{selectedSupervisorGoal.goal_name}</Typography.Text>
+                  <Tag color="green" style={{ marginLeft: 8 }}>权重 {selectedSupervisorGoal.goal_weight}%</Tag>
+                  <Tag color="blue" style={{ marginLeft: 4 }}>{selectedSupervisorGoal.goal_nature === 'quantitative' ? '定量' : '定性'}</Tag>
+                </div>
+                {selectedSupervisorGoal.goal_description && (
+                  <Typography.Paragraph style={{ margin: 0, fontSize: 13, color: '#555', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {selectedSupervisorGoal.goal_description}
+                  </Typography.Paragraph>
+                )}
+              </Space>
+            </Card>
+          )}
+
           <Form.Item name="goal_description" label="目标描述" rules={[{ required: true, message: '请输入目标描述' }]}>
             <TextArea rows={3} placeholder="请描述目标内容" />
           </Form.Item>

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Form, Input, Select, InputNumber, Button, Card, Space, Divider, DatePicker, Row, Col, message, Alert } from 'antd';
-import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { Form, Input, Select, InputNumber, Button, Card, Space, Divider, DatePicker, Row, Col, message, Alert, Tag, Typography } from 'antd';
+import { PlusOutlined, MinusCircleOutlined, LinkOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { pbcApi, PbcGoal, PbcPeriod, GoalType } from '../../api';
+import { pbcApi, PbcGoal, PbcPeriod, GoalType, PbcStatus } from '../../api';
 import { useAuthStore } from '../../store/authStore';
+
+const { Text, Paragraph } = Typography;
 
 const { TextArea } = Input;
 const getDefaultGoalNature = (goalType: GoalType) =>
@@ -24,6 +26,7 @@ const PBCForm: React.FC = () => {
   const [isReadonly, setIsReadonly] = useState(false);
   const [currentPeriodId, setCurrentPeriodId] = useState<number | undefined>();
   const [originalStatus, setOriginalStatus] = useState<string | undefined>();
+  const [selectedSupervisorGoal, setSelectedSupervisorGoal] = useState<PbcGoal | undefined>();
 
   const fetchPeriods = async () => {
     try {
@@ -63,6 +66,10 @@ const PBCForm: React.FC = () => {
       setGoalType(data.goal_type);
       setCurrentPeriodId(data.period_id);
       setOriginalStatus(data.status);
+      if (data.supervisor_goal_id) {
+        // 回显时设置选中的上级目标（等上级目标加载后再匹配）
+        setSelectedSupervisorGoal(data.supervisorGoal);
+      }
       // 如果是查看模式，直接设置为只读
       if (viewMode) {
         setIsReadonly(true);
@@ -95,6 +102,15 @@ const PBCForm: React.FC = () => {
     }
   }, [currentPeriodId]);
 
+  // supervisorGoals 加载后，同步 selectedSupervisorGoal（如编辑模式切换周期）
+  useEffect(() => {
+    const currentSupervisorGoalId = form.getFieldValue('supervisor_goal_id');
+    if (currentSupervisorGoalId && supervisorGoals.length > 0) {
+      const found = supervisorGoals.find(g => g.goal_id === currentSupervisorGoalId);
+      if (found) setSelectedSupervisorGoal(found);
+    }
+  }, [supervisorGoals]);
+
   // 处理表单值变化
   const handleValuesChange = (changedValues: any) => {
     if (changedValues.period_id !== undefined) {
@@ -103,6 +119,15 @@ const PBCForm: React.FC = () => {
     if (changedValues.goal_type !== undefined) {
       setGoalType(changedValues.goal_type);
       form.setFieldValue('goal_nature', getDefaultGoalNature(changedValues.goal_type));
+      // 切换目标类型时清空上级目标选择
+      if (changedValues.goal_type !== 'business') {
+        form.setFieldValue('supervisor_goal_id', undefined);
+        setSelectedSupervisorGoal(undefined);
+      }
+    }
+    if (changedValues.supervisor_goal_id !== undefined) {
+      const found = supervisorGoals.find(g => g.goal_id === changedValues.supervisor_goal_id);
+      setSelectedSupervisorGoal(found);
     }
   };
 
@@ -165,14 +190,14 @@ const PBCForm: React.FC = () => {
         initialValues={{ goal_type: 'business', goal_nature: 'quantitative', goal_weight: 0 }}
         disabled={isReadonly}
       >
-        {/* 第一行：考核周期、目标类型、关联上级目标 */}
+        {/* 第一行：考核周期、目标类型 */}
         <Row gutter={16}>
-          <Col span={8}>
+          <Col span={12}>
             <Form.Item
               name="period_id"
               label="考核周期"
-              labelCol={{ span: 6 }}
-              wrapperCol={{ span: 18 }}
+              labelCol={{ span: 5 }}
+              wrapperCol={{ span: 19 }}
               rules={[{ required: true, message: '请选择考核周期' }]}
             >
               <Select placeholder="请选择考核周期">
@@ -184,13 +209,12 @@ const PBCForm: React.FC = () => {
               </Select>
             </Form.Item>
           </Col>
-
-          <Col span={goalType === 'business' && user?.role !== 'gm' ? 8 : 16}>
+          <Col span={12}>
             <Form.Item
               name="goal_type"
               label="目标类型"
-              labelCol={{ span: goalType === 'business' && user?.role !== 'gm' ? 6 : 3 }}
-              wrapperCol={{ span: goalType === 'business' && user?.role !== 'gm' ? 18 : 21 }}
+              labelCol={{ span: 5 }}
+              wrapperCol={{ span: 19 }}
               rules={[{ required: true, message: '请选择目标类型' }]}
             >
               <Select placeholder="请选择目标类型">
@@ -202,50 +226,27 @@ const PBCForm: React.FC = () => {
               </Select>
             </Form.Item>
           </Col>
-
-          {goalType === 'business' && user?.role !== 'gm' && (
-            <Col span={8}>
-              <Form.Item
-                name="supervisor_goal_id"
-                label="上级目标"
-                labelCol={{ span: 6 }}
-                wrapperCol={{ span: 18 }}
-              >
-                <Select 
-                  placeholder={supervisorGoals.length > 0 ? "请选择（可选）" : "暂无"} 
-                  allowClear
-                  disabled={supervisorGoals.length === 0}
-                >
-                  {supervisorGoals.map((goal) => (
-                    <Select.Option key={goal.goal_id} value={goal.goal_id}>
-                      {goal.goal_name}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-          )}
         </Row>
 
-        {/* 第二行：目标名称、目标权重 */}
+        {/* 第二行：目标名称、权重 */}
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
               name="goal_name"
               label="目标名称"
-              labelCol={{ span: 4 }}
-              wrapperCol={{ span: 20 }}
+              labelCol={{ span: 5 }}
+              wrapperCol={{ span: 19 }}
               rules={[{ required: true, message: '请输入目标名称' }]}
             >
               <Input placeholder="请输入目标名称" />
             </Form.Item>
           </Col>
-          <Col span={8}>
+          <Col span={12}>
             <Form.Item
               name="goal_weight"
               label="权重"
-              labelCol={{ span: 6 }}
-              wrapperCol={{ span: 18 }}
+              labelCol={{ span: 5 }}
+              wrapperCol={{ span: 19 }}
               rules={[{ required: true, message: '请输入目标权重' }]}
             >
               <InputNumber 
@@ -257,21 +258,91 @@ const PBCForm: React.FC = () => {
               />
             </Form.Item>
           </Col>
-          <Col span={4}>
+        </Row>
+
+        {/* 第三行：性质、关联上级业务目标（仅业务目标且非总经理） */}
+        <Row gutter={16}>
+          <Col span={12}>
             <Form.Item
               name="goal_nature"
               label="性质"
-              labelCol={{ span: 10 }}
-              wrapperCol={{ span: 14 }}
+              labelCol={{ span: 5 }}
+              wrapperCol={{ span: 19 }}
               rules={[{ required: true, message: '请选择性质' }]}
             >
-              <Select placeholder="性质">
+              <Select placeholder="请选择性质">
                 <Select.Option value="qualitative">定性</Select.Option>
                 <Select.Option value="quantitative">定量</Select.Option>
               </Select>
             </Form.Item>
           </Col>
+          {goalType === 'business' && user?.role !== 'gm' && (
+            <Col span={12}>
+              <Form.Item
+                name="supervisor_goal_id"
+                label="关联上级目标"
+                labelCol={{ span: 5 }}
+                wrapperCol={{ span: 19 }}
+                extra={supervisorGoals.length === 0 ? <Text type="secondary" style={{ fontSize: 12 }}>当前周期上级暂无业务目标</Text> : undefined}
+              >
+                <Select 
+                  placeholder={supervisorGoals.length > 0 ? "可关联上级当季业务目标（可选）" : "暂无可关联目标"} 
+                  allowClear
+                  disabled={supervisorGoals.length === 0}
+                  optionLabelProp="label"
+                >
+                  {supervisorGoals.map((goal) => (
+                    <Select.Option key={goal.goal_id} value={goal.goal_id} label={goal.goal_name}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500 }}>{goal.goal_name}</div>
+                          {goal.goal_description && (
+                            <div style={{ fontSize: 12, color: '#888', whiteSpace: 'normal', lineHeight: '1.4' }}>
+                              {goal.goal_description.length > 60 ? goal.goal_description.slice(0, 60) + '…' : goal.goal_description}
+                            </div>
+                          )}
+                        </div>
+                        <Tag
+                          color={goal.status === 'approved' ? 'success' : goal.status === 'submitted' ? 'processing' : goal.status === 'rejected' ? 'error' : 'default'}
+                          style={{ marginTop: 2, flexShrink: 0 }}
+                        >
+                          {({ draft: '草稿', submitted: '待审核', approved: '已通过', rejected: '已驳回', archived: '已归档' } as Record<PbcStatus, string>)[goal.status] || goal.status}
+                        </Tag>
+                      </div>
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          )}
         </Row>
+
+        {/* 选中上级目标后展示详情 */}
+        {goalType === 'business' && user?.role !== 'gm' && selectedSupervisorGoal && (
+          <Card
+            size="small"
+            style={{ marginBottom: 16, background: '#f6ffed', border: '1px solid #b7eb8f' }}
+            title={
+              <Space>
+                <LinkOutlined style={{ color: '#52c41a' }} />
+                <Text style={{ fontSize: 13 }}>已关联上级目标</Text>
+              </Space>
+            }
+          >
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <div>
+                <Text strong>{selectedSupervisorGoal.goal_name}</Text>
+                <Tag color="green" style={{ marginLeft: 8 }}>权重 {selectedSupervisorGoal.goal_weight}%</Tag>
+                <Tag color="blue" style={{ marginLeft: 4 }}>{selectedSupervisorGoal.goal_nature === 'quantitative' ? '定量' : '定性'}</Tag>
+              </div>
+              {selectedSupervisorGoal.goal_description && (
+                <Paragraph style={{ margin: 0, fontSize: 13, color: '#555', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {selectedSupervisorGoal.goal_description}
+                </Paragraph>
+              )}
+            </Space>
+          </Card>
+        )}
 
         {/* 第三行：目标描述 */}
         <Form.Item
