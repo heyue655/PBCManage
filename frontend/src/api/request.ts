@@ -19,6 +19,22 @@ const request = axios.create({
   timeout: 10000,
 });
 
+const getErrorMessage = (data: any, fallback: string) => {
+  if (!data) {
+    return fallback;
+  }
+
+  if (Array.isArray(data.message)) {
+    return data.message.join('；');
+  }
+
+  if (typeof data.message === 'string' && data.message.trim()) {
+    return data.message;
+  }
+
+  return fallback;
+};
+
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
@@ -41,15 +57,21 @@ request.interceptors.response.use(
   (error) => {
     if (error.response) {
       const { status, data } = error.response;
+      const requestUrl = error.config?.url || '';
+      const isLoginRequest = requestUrl.includes('/auth/login');
       
       if (status === 401) {
-        message.error('登录已过期，请重新登录');
-        useAuthStore.getState().logout();
-        window.location.href = '/login';
+        if (isLoginRequest) {
+          message.error(getErrorMessage(data, '用户名或密码错误'));
+        } else {
+          message.error('登录已过期，请重新登录');
+          useAuthStore.getState().logout();
+          window.location.href = '/login';
+        }
       } else if (status === 403) {
-        message.error('没有权限执行此操作');
+        message.error(getErrorMessage(data, '没有权限执行此操作'));
       } else {
-        message.error(data.message || '请求失败');
+        message.error(getErrorMessage(data, '请求失败'));
       }
     } else {
       message.error('网络错误，请检查网络连接');

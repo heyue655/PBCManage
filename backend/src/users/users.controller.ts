@@ -74,6 +74,11 @@ export class UsersController {
     return this.usersService.delete(req.user.userId, +id);
   }
 
+  @Post(':id/reset-password')
+  async resetPassword(@Request() req: any, @Param('id') id: string) {
+    return this.usersService.resetPassword(req.user.userId, +id);
+  }
+
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   async importFromExcel(@UploadedFile() file: Express.Multer.File) {

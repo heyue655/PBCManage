@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, Upload, message, Row, Col } from 'antd';
-import { PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, SearchOutlined, RedoOutlined } from '@ant-design/icons';
 import { usersApi, User, departmentsApi, Department } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -95,6 +95,15 @@ const UserManage: React.FC = () => {
       await usersApi.delete(userId);
       message.success('删除成功');
       fetchData();
+    } catch {
+      // 错误已处理
+    }
+  };
+
+  const handleResetPassword = async (user: User) => {
+    try {
+      const result = await usersApi.resetPassword(user.user_id);
+      message.success(result.message || `用户 ${user.real_name} 的密码已重置为123456`);
     } catch {
       // 错误已处理
     }
@@ -203,6 +212,20 @@ const UserManage: React.FC = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<RedoOutlined />}
+            onClick={() => {
+              Modal.confirm({
+                title: '确认重置密码',
+                content: `确定将用户 ${record.real_name} 的密码重置为123456吗？`,
+                onOk: () => handleResetPassword(record),
+              });
+            }}
+          >
+            重置密码
           </Button>
           <Button
             type="link"

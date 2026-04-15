@@ -70,6 +70,10 @@ export const usersApi = {
     return request.delete(`/users/${id}`);
   },
 
+  resetPassword: (id: number): Promise<{ message: string }> => {
+    return request.post(`/users/${id}/reset-password`);
+  },
+
   import: (file: File): Promise<ImportResult> => {
     const formData = new FormData();
     formData.append('file', file);

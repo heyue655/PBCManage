@@ -309,6 +309,36 @@ export class UsersService {
     return { message: '删除成功' };
   }
 
+  async resetPassword(currentUserId: number, id: number) {
+    const currentUser = await this.prisma.user.findUnique({
+      where: { user_id: currentUserId },
+    });
+
+    if (!currentUser) {
+      throw new NotFoundException('当前用户不存在');
+    }
+
+    if (currentUser.role === 'employee') {
+      throw new BadRequestException('普通员工无权重置密码');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { user_id: id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+
+    const hashedPassword = await bcrypt.hash('123456', 10);
+    await this.prisma.user.update({
+      where: { user_id: id },
+      data: { password: hashedPassword },
+    });
+
+    return { message: '密码已重置为123456' };
+  }
+
   generateImportTemplate(): Buffer {
     const templateData = [
       {
