@@ -73,6 +73,7 @@ model PbcGoal {
   user_id            Int
   period_id          Int?
   goal_type          GoalType
+  goal_nature        GoalNature    @default(qualitative)
   goal_name          String        @db.VarChar(255)
   goal_description   String        @db.Text
   goal_weight        Decimal       @db.Decimal(5, 2)
@@ -239,6 +240,13 @@ enum GoalType {
   team
 
   @@map("goal_type")
+}
+
+enum GoalNature {
+  qualitative
+  quantitative
+
+  @@map("goal_nature")
 }
 
 enum PbcStatus {

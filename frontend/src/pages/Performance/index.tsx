@@ -5,6 +5,7 @@ import { performanceApi, Performance, UpdatePerformanceDto, pbcApi } from '../..
 import { useAuthStore } from '../../store/authStore';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import MultilineText from '../../components/MultilineText';
 
 interface PeriodOption {
   period_id: number;
@@ -203,8 +204,7 @@ const PerformanceList: React.FC = () => {
       title: '绩效评价',
       key: 'performance_comment',
       width: 200,
-      ellipsis: true,
-      render: (_, record) => record.performance_comment || '-',
+      render: (_, record) => <MultilineText text={record.performance_comment} />,
     },
     {
       title: '主管评分',
@@ -272,7 +272,7 @@ const PerformanceList: React.FC = () => {
           <Descriptions.Item label="姓名">{currentRecord.user?.real_name || '-'}</Descriptions.Item>
           <Descriptions.Item label="部门">{currentRecord.user?.department?.department_name || '-'}</Descriptions.Item>
           <Descriptions.Item label="季度">{`${currentRecord.period?.year}Q${currentRecord.period?.quarter}`}</Descriptions.Item>
-          <Descriptions.Item label="绩效评价">{currentRecord.performance_comment || '-'}</Descriptions.Item>
+          <Descriptions.Item label="绩效评价"><MultilineText text={currentRecord.performance_comment} /></Descriptions.Item>
           <Descriptions.Item label="绩效等级">
             <Select
               style={{ width: 200 }}
@@ -335,7 +335,7 @@ const PerformanceList: React.FC = () => {
         <Descriptions.Item label="绩效等级">
           {level ? <Tag color={levelColorMap[level] || 'default'}>{performanceLevelOptions.find(o => o.value === level)?.label || level}</Tag> : '-'}
         </Descriptions.Item>
-        <Descriptions.Item label="绩效评价">{currentRecord.performance_comment || '-'}</Descriptions.Item>
+        <Descriptions.Item label="绩效评价"><MultilineText text={currentRecord.performance_comment} /></Descriptions.Item>
         <Descriptions.Item label="是否有AI维度的组织贡献">
           {currentRecord.has_ai_contribution === true
             ? <Tag color="green">是</Tag>
@@ -343,7 +343,7 @@ const PerformanceList: React.FC = () => {
             ? <Tag>否</Tag>
             : '-'}
         </Descriptions.Item>
-        <Descriptions.Item label="AI维度绩效评价">{currentRecord.ai_performance_comment || '-'}</Descriptions.Item>
+        <Descriptions.Item label="AI维度绩效评价"><MultilineText text={currentRecord.ai_performance_comment} /></Descriptions.Item>
         <Descriptions.Item label="末位管理执行状态">{currentRecord.bottom_mgmt_status || '-'}</Descriptions.Item>
         <Descriptions.Item label="拟淘汰时间">
           {currentRecord.planned_elimination_date

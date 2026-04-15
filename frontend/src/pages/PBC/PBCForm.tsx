@@ -7,6 +7,8 @@ import { pbcApi, PbcGoal, PbcPeriod, GoalType } from '../../api';
 import { useAuthStore } from '../../store/authStore';
 
 const { TextArea } = Input;
+const getDefaultGoalNature = (goalType: GoalType) =>
+  goalType === 'business' ? 'quantitative' : 'qualitative';
 
 const PBCForm: React.FC = () => {
   const navigate = useNavigate();
@@ -55,6 +57,7 @@ const PBCForm: React.FC = () => {
       const data = await pbcApi.getOne(parseInt(id));
       form.setFieldsValue({
         ...data,
+        goal_nature: data.goal_nature || getDefaultGoalNature(data.goal_type),
         completion_time: data.completion_time ? dayjs(data.completion_time) : undefined,
       });
       setGoalType(data.goal_type);
@@ -99,6 +102,7 @@ const PBCForm: React.FC = () => {
     }
     if (changedValues.goal_type !== undefined) {
       setGoalType(changedValues.goal_type);
+      form.setFieldValue('goal_nature', getDefaultGoalNature(changedValues.goal_type));
     }
   };
 
@@ -158,7 +162,7 @@ const PBCForm: React.FC = () => {
         layout="horizontal"
         onFinish={onFinish}
         onValuesChange={handleValuesChange}
-        initialValues={{ goal_type: 'business', goal_weight: 0 }}
+        initialValues={{ goal_type: 'business', goal_nature: 'quantitative', goal_weight: 0 }}
         disabled={isReadonly}
       >
         {/* 第一行：考核周期、目标类型、关联上级目标 */}
@@ -225,12 +229,12 @@ const PBCForm: React.FC = () => {
 
         {/* 第二行：目标名称、目标权重 */}
         <Row gutter={16}>
-          <Col span={16}>
+          <Col span={12}>
             <Form.Item
               name="goal_name"
               label="目标名称"
-              labelCol={{ span: 3 }}
-              wrapperCol={{ span: 21 }}
+              labelCol={{ span: 4 }}
+              wrapperCol={{ span: 20 }}
               rules={[{ required: true, message: '请输入目标名称' }]}
             >
               <Input placeholder="请输入目标名称" />
@@ -251,6 +255,20 @@ const PBCForm: React.FC = () => {
                 style={{ width: '100%' }}
                 addonAfter="%" 
               />
+            </Form.Item>
+          </Col>
+          <Col span={4}>
+            <Form.Item
+              name="goal_nature"
+              label="性质"
+              labelCol={{ span: 10 }}
+              wrapperCol={{ span: 14 }}
+              rules={[{ required: true, message: '请选择性质' }]}
+            >
+              <Select placeholder="性质">
+                <Select.Option value="qualitative">定性</Select.Option>
+                <Select.Option value="quantitative">定量</Select.Option>
+              </Select>
             </Form.Item>
           </Col>
         </Row>

@@ -1,6 +1,7 @@
 import request from './request';
 
 export type GoalType = 'business' | 'skill' | 'team';
+export type GoalNature = 'qualitative' | 'quantitative';
 export type PbcStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'archived';
 export type TaskStatus = 'pending' | 'filling' | 'submitted' | 'approved' | 'rejected' | 'archived';
 
@@ -42,6 +43,7 @@ export interface PbcGoal {
   user_id: number;
   period_id?: number;
   goal_type: GoalType;
+  goal_nature: GoalNature;
   goal_name: string;
   goal_description: string;
   goal_weight: number;
@@ -88,6 +90,7 @@ export interface PbcPeriod {
 export interface CreatePbcParams {
   period_id?: number;
   goal_type: GoalType;
+  goal_nature: GoalNature;
   goal_name: string;
   goal_description: string;
   goal_weight: number;

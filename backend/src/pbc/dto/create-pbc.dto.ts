@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, IsDateString } from 'class-validator';
-import { GoalType } from '../../entities';
+import { GoalType, GoalNature } from '../../entities';
 
 export class CreatePbcDto {
   @IsOptional()
@@ -9,6 +9,10 @@ export class CreatePbcDto {
   @IsNotEmpty({ message: '目标类型不能为空' })
   @IsEnum(GoalType)
   goal_type: GoalType;
+
+  @IsOptional()
+  @IsEnum(GoalNature)
+  goal_nature?: GoalNature;
 
   @IsNotEmpty({ message: '目标名称不能为空' })
   @IsString()

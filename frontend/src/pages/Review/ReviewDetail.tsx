@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Descriptions, Tag, Button, Space, Timeline, Divider, Form, InputNumber, Input, message } from 'antd';
 import { pbcApi, reviewsApi, PbcGoal, ApprovalRecord, PbcStatus } from '../../api';
+import MultilineText from '../../components/MultilineText';
 
 const { TextArea } = Input;
 
@@ -17,6 +18,11 @@ const actionMap = {
   submit: { color: 'blue', text: '提交审核' },
   approve: { color: 'green', text: '审核通过' },
   reject: { color: 'red', text: '审核驳回' },
+};
+
+const goalNatureMap: Record<string, string> = {
+  qualitative: '定性',
+  quantitative: '定量',
 };
 
 const ReviewDetail: React.FC = () => {
@@ -102,13 +108,14 @@ const ReviewDetail: React.FC = () => {
               team: '组织与人员管理&团队建设',
             }[goal.goal_type]}
           </Descriptions.Item>
+          <Descriptions.Item label="性质">{goalNatureMap[(goal as any).goal_nature] || '-'}</Descriptions.Item>
           <Descriptions.Item label="目标权重">{goal.goal_weight}%</Descriptions.Item>
           <Descriptions.Item label="目标描述" span={2}>
-            {goal.goal_description}
+            <MultilineText text={goal.goal_description} />
           </Descriptions.Item>
           {goal.measures && (
             <Descriptions.Item label="实现举措" span={2}>
-              {goal.measures}
+              <MultilineText text={goal.measures} />
             </Descriptions.Item>
           )}
           {goal.supervisorGoal && (
@@ -120,9 +127,9 @@ const ReviewDetail: React.FC = () => {
 
         <Divider>评价标准</Divider>
         <Descriptions bordered column={1}>
-          <Descriptions.Item label="不可接受">{goal.unacceptable || '-'}</Descriptions.Item>
-          <Descriptions.Item label="达标">{goal.acceptable || '-'}</Descriptions.Item>
-          <Descriptions.Item label="卓越">{goal.excellent || '-'}</Descriptions.Item>
+          <Descriptions.Item label="不可接受"><MultilineText text={goal.unacceptable} style={{ color: '#ff4d4f' }} /></Descriptions.Item>
+          <Descriptions.Item label="达标"><MultilineText text={goal.acceptable} style={{ color: '#1890ff' }} /></Descriptions.Item>
+          <Descriptions.Item label="卓越"><MultilineText text={goal.excellent} style={{ color: '#52c41a' }} /></Descriptions.Item>
         </Descriptions>
 
         {goal.status === 'archived' && (
@@ -131,8 +138,8 @@ const ReviewDetail: React.FC = () => {
             <Descriptions bordered column={2}>
               <Descriptions.Item label="自评分数">{goal.self_score ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="主管评分">{goal.supervisor_score ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="自评说明" span={2}>{goal.self_comment || '-'}</Descriptions.Item>
-              <Descriptions.Item label="主管评语" span={2}>{goal.supervisor_comment || '-'}</Descriptions.Item>
+              <Descriptions.Item label="自评说明" span={2}><MultilineText text={goal.self_comment} /></Descriptions.Item>
+              <Descriptions.Item label="主管评语" span={2}><MultilineText text={goal.supervisor_comment} /></Descriptions.Item>
             </Descriptions>
 
             {!goal.supervisor_score && (

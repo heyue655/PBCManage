@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Tag, Empty, Descriptions } from 'antd';
 import { performanceApi, Performance } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
+import MultilineText from '../../components/MultilineText';
 
 const levelColorMap: Record<string, string> = {
   S: 'gold',
@@ -51,8 +52,7 @@ const MyPerformance: React.FC = () => {
       title: '绩效评价',
       dataIndex: 'performance_comment',
       key: 'performance_comment',
-      ellipsis: true,
-      render: (text: string | null) => text || '-',
+      render: (text: string | null) => <MultilineText text={text} />,
     },
     {
       title: '下发时间',
@@ -100,10 +100,10 @@ const MyPerformance: React.FC = () => {
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="主管整体评价" span={2}>
-                  {record.evaluation?.supervisor_overall_comment || '-'}
+                  <MultilineText text={record.evaluation?.supervisor_overall_comment} />
                 </Descriptions.Item>
                 <Descriptions.Item label="绩效评价" span={2}>
-                  {record.performance_comment || '-'}
+                  <MultilineText text={record.performance_comment} />
                 </Descriptions.Item>
                 {record.has_ai_contribution != null && (
                   <Descriptions.Item label="AI维度组织贡献">
@@ -112,7 +112,7 @@ const MyPerformance: React.FC = () => {
                 )}
                 {record.ai_performance_comment && (
                   <Descriptions.Item label="AI维度绩效评价" span={record.has_ai_contribution != null ? 1 : 2}>
-                    {record.ai_performance_comment}
+                    <MultilineText text={record.ai_performance_comment} />
                   </Descriptions.Item>
                 )}
               </Descriptions>

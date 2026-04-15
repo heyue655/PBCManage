@@ -1,10 +1,14 @@
 import { IsOptional, IsString, IsNumber, IsEnum, IsDateString } from 'class-validator';
-import { GoalType } from '../../entities';
+import { GoalType, GoalNature } from '../../entities';
 
 export class UpdatePbcDto {
   @IsOptional()
   @IsEnum(GoalType)
   goal_type?: GoalType;
+
+  @IsOptional()
+  @IsEnum(GoalNature)
+  goal_nature?: GoalNature;
 
   @IsOptional()
   @IsString()

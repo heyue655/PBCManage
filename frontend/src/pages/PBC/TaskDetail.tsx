@@ -11,6 +11,7 @@ import {
 import { pbcApi, PbcTask, PbcGoal, PbcStatus } from '../../api';
 import { useAuthStore } from '../../store/authStore';
 import { sortGoals } from '../../utils/goalSort';
+import MultilineText from '../../components/MultilineText';
 
 const { TextArea } = Input;
 
@@ -19,6 +20,14 @@ const goalTypeMap: Record<string, string> = {
   skill: '个人能力提升',
   team: '组织与人员管理&团队建设',
 };
+
+const goalNatureMap: Record<string, string> = {
+  qualitative: '定性',
+  quantitative: '定量',
+};
+
+const getDefaultGoalNature = (goalType?: string) =>
+  goalType === 'business' ? 'quantitative' : 'qualitative';
 
 const statusMap: Record<PbcStatus, { color: string; text: string }> = {
   draft: { color: 'default', text: '草稿' },
@@ -123,6 +132,7 @@ const TaskDetail: React.FC = () => {
     if (goal) {
       goalForm.setFieldsValue({
         goal_type: goal.goal_type,
+        goal_nature: (goal as any).goal_nature || getDefaultGoalNature(goal.goal_type),
         goal_name: goal.goal_name,
         goal_weight: Number(goal.goal_weight),
         goal_description: goal.goal_description,
@@ -132,6 +142,11 @@ const TaskDetail: React.FC = () => {
         acceptable: goal.acceptable,
         excellent: goal.excellent,
         completion_time: goal.completion_time,
+      });
+    } else {
+      goalForm.setFieldsValue({
+        goal_type: 'business',
+        goal_nature: 'quantitative',
       });
     }
     // 获取当前周期的上级目标
@@ -370,10 +385,11 @@ const TaskDetail: React.FC = () => {
               }
             >
               <Descriptions column={1} size="small" bordered>
-                <Descriptions.Item label="目标描述">{goal.goal_description}</Descriptions.Item>
+                <Descriptions.Item label="性质">{goalNatureMap[(goal as any).goal_nature] || '-'}</Descriptions.Item>
                 {goal.goal_type !== 'skill' && goal.measures && (
-                  <Descriptions.Item label="实现举措">{goal.measures}</Descriptions.Item>
+                    <Descriptions.Item label="实现举措"><MultilineText text={goal.measures} /></Descriptions.Item>
                 )}
+                  <Descriptions.Item label="目标描述"><MultilineText text={goal.goal_description} /></Descriptions.Item>
                 {goal.goal_type === 'skill' && goal.completion_time && (
                   <Descriptions.Item label="完成时间">
                     {new Date(goal.completion_time).toLocaleDateString('zh-CN')}
@@ -382,13 +398,13 @@ const TaskDetail: React.FC = () => {
                 {goal.goal_type === 'business' && (
                   <>
                     <Descriptions.Item label={<span style={{ color: '#ff4d4f' }}>不可接受标准</span>}>
-                      <span style={{ color: '#ff4d4f' }}>{goal.unacceptable || '-'}</span>
+                      <MultilineText text={goal.unacceptable} style={{ color: '#ff4d4f' }} />
                     </Descriptions.Item>
                     <Descriptions.Item label={<span style={{ color: '#1890ff' }}>达标标准</span>}>
-                      <span style={{ color: '#1890ff' }}>{goal.acceptable || '-'}</span>
+                      <MultilineText text={goal.acceptable} style={{ color: '#1890ff' }} />
                     </Descriptions.Item>
                     <Descriptions.Item label={<span style={{ color: '#52c41a' }}>卓越标准</span>}>
-                      <span style={{ color: '#52c41a' }}>{goal.excellent || '-'}</span>
+                      <MultilineText text={goal.excellent} style={{ color: '#52c41a' }} />
                     </Descriptions.Item>
                   </>
                 )}
@@ -401,7 +417,7 @@ const TaskDetail: React.FC = () => {
                       </span>
                     </Descriptions.Item>
                     <Descriptions.Item label="自评说明">
-                      {(goal as any).self_comment || '-'}
+                      <MultilineText text={(goal as any).self_comment} />
                     </Descriptions.Item>
                   </>
                 )}
@@ -414,7 +430,7 @@ const TaskDetail: React.FC = () => {
                       </span>
                     </Descriptions.Item>
                     <Descriptions.Item label="主管评价">
-                      {(goal as any).supervisor_comment || '-'}
+                      <MultilineText text={(goal as any).supervisor_comment} />
                     </Descriptions.Item>
                   </>
                 )}
@@ -532,7 +548,7 @@ const TaskDetail: React.FC = () => {
               {new Date(evaluation.self_submitted_at).toLocaleString('zh-CN')}
             </Descriptions.Item>
             <Descriptions.Item label="整体评价">
-              {evaluation.self_overall_comment}
+              <MultilineText text={evaluation.self_overall_comment} />
             </Descriptions.Item>
           </Descriptions>
         </Card>
@@ -545,7 +561,7 @@ const TaskDetail: React.FC = () => {
               {new Date(evaluation.supervisor_submitted_at).toLocaleString('zh-CN')}
             </Descriptions.Item>
             <Descriptions.Item label="整体评价">
-              {evaluation.supervisor_overall_comment}
+              <MultilineText text={evaluation.supervisor_overall_comment} />
             </Descriptions.Item>
           </Descriptions>
         </Card>
@@ -561,12 +577,26 @@ const TaskDetail: React.FC = () => {
         cancelText="取消"
         width={700}
       >
-        <Form form={goalForm} layout="vertical">
+        <Form
+          form={goalForm}
+          layout="vertical"
+          onValuesChange={(changedValues) => {
+            if (changedValues.goal_type !== undefined) {
+              goalForm.setFieldValue('goal_nature', getDefaultGoalNature(changedValues.goal_type));
+            }
+          }}
+        >
           <Form.Item name="goal_type" label="目标类型" rules={[{ required: true }]}>
             <Select placeholder="选择目标类型">
               {Object.entries(goalTypeMap).map(([k, v]) => (
                 <Select.Option key={k} value={k}>{v}</Select.Option>
               ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="goal_nature" label="性质" rules={[{ required: true, message: '请选择性质' }]}>
+            <Select placeholder="选择性质">
+              <Select.Option value="qualitative">定性</Select.Option>
+              <Select.Option value="quantitative">定量</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="goal_name" label="目标名称" rules={[{ required: true, message: '请输入目标名称' }]}>

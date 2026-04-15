@@ -4,6 +4,9 @@ import { CreatePbcDto, UpdatePbcDto, CreatePeriodDto } from './dto';
 import { DingtalkService } from '../dingtalk/dingtalk.service';
 import { PerformanceService } from '../performance/performance.service';
 
+const getDefaultGoalNature = (goalType?: string) =>
+  goalType === 'business' ? 'quantitative' : 'qualitative';
+
 @Injectable()
 export class PbcService {
   constructor(
@@ -118,6 +121,7 @@ export class PbcService {
       user_id: userId,
       period_id: createPbcDto.period_id,
       goal_type: createPbcDto.goal_type,
+      goal_nature: createPbcDto.goal_nature || getDefaultGoalNature(createPbcDto.goal_type),
       goal_name: createPbcDto.goal_name,
       goal_description: createPbcDto.goal_description,
       goal_weight: createPbcDto.goal_weight,
@@ -152,7 +156,8 @@ export class PbcService {
       console.log('=== 创建PBC目标结束 ===\n');
       return result;
     } catch (error) {
-      console.log('❌ 数据库创建失败:', error.message);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log('❌ 数据库创建失败:', errorMessage);
       console.log('错误详情:', error);
       console.log('=== 创建PBC目标结束（失败）===\n');
       throw error;
@@ -274,6 +279,10 @@ export class PbcService {
 
     // 处理更新数据
     const updateData: any = { ...updatePbcDto };
+
+    if (updateData.goal_type && !updateData.goal_nature) {
+      updateData.goal_nature = getDefaultGoalNature(updateData.goal_type);
+    }
     
     // 如果有 completion_time，转换为 Date 对象
     if (updateData.completion_time) {

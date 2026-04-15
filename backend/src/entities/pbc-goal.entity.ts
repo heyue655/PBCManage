@@ -8,6 +8,11 @@ export enum GoalType {
   TEAM = 'team',                   // 团队业务目标
 }
 
+export enum GoalNature {
+  QUALITATIVE = 'qualitative',     // 定性
+  QUANTITATIVE = 'quantitative',   // 定量
+}
+
 export enum PbcStatus {
   DRAFT = 'draft',
   SUBMITTED = 'submitted',
@@ -29,6 +34,9 @@ export class PbcGoal {
 
   @Column({ type: 'enum', enum: GoalType })
   goal_type: GoalType;
+
+  @Column({ type: 'enum', enum: GoalNature, default: GoalNature.QUALITATIVE })
+  goal_nature: GoalNature;
 
   @Column()
   goal_name: string;
