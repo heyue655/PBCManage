@@ -20,16 +20,12 @@ async function bootstrap() {
     origin: (origin, callback) => {
       const allowedOrigins: Array<string | RegExp> = [
         'http://localhost:3000',
-        'http://localhost:5000',
         'http://localhost',
         'https://localhost:3000',
-        'https://localhost:5000',
         'https://localhost',
         'http://127.0.0.1:3000',
-        'http://127.0.0.1:5000',
         'http://127.0.0.1',
         'https://127.0.0.1:3000',
-        'https://127.0.0.1:5000',
         'https://127.0.0.1',
         'https://pbc.das-security.cn',
         /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,  // 192.168.x.x

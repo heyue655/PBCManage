@@ -48,9 +48,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://pbc.das-security.cn}
     networks:
       - pbcmanage-network
-    # 现在前端不在容器内直接访问后端，需要暴露后端端口供前端访问
-    ports:
-      - "3001:3001"
+    # 后端仅对内部网络暴露，不直接对外（通过 Nginx 代理）
+    # 若需直接访问后端 API，取消以下注释：
+    # ports:
+    #   - "3001:3001"
 
   # ─────────────────────────────────────────
   # React 前端（Nginx）
