@@ -14,14 +14,15 @@ ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
 RUN npm run build
 
-# ---- 生产阶段（Nginx 代理）----
+# ---- 生产阶段（Nginx 静态服务）----
 FROM nginx:1.25-alpine AS production
 
 # 复制构建产物
 COPY --from=builder /app/build /usr/share/nginx/html
 
-# 复制 Nginx 配置（包含API代理）
-COPY simple-proxy.conf /etc/nginx/conf.d/default.conf
+# 删除默认配置，然后复制自定义配置
+RUN rm /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 5000
 
