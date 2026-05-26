@@ -7,15 +7,19 @@ import {
   Tag,
   Space,
   Empty,
+  Popconfirm,
+  message,
 } from 'antd';
 import {
   EditOutlined,
   EyeOutlined,
   StarOutlined,
   CheckCircleOutlined,
+  CloseCircleOutlined,
   ClockCircleOutlined,
   FileOutlined,
   SyncOutlined,
+  UndoOutlined,
 } from '@ant-design/icons';
 import { pbcApi, PbcTask, TaskStatus } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
@@ -25,6 +29,8 @@ const taskStatusConfig: Record<TaskStatus, { color: string; text: string; icon: 
   filling: { color: 'processing', text: '填写中', icon: <EditOutlined /> },
   submitted: { color: 'blue', text: '待审核', icon: <SyncOutlined /> },
   approved: { color: 'success', text: '已通过', icon: <CheckCircleOutlined /> },
+  evaluating: { color: 'orange', text: '待评价', icon: <StarOutlined /> },
+  self_eval_rejected: { color: 'error', text: '自评不通过', icon: <CloseCircleOutlined /> },
   rejected: { color: 'error', text: '已驳回', icon: <ClockCircleOutlined /> },
   archived: { color: 'purple', text: '已归档', icon: <FileOutlined /> },
 };
@@ -49,6 +55,26 @@ const PBCList: React.FC = () => {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  const handleWithdraw = async (task: PbcTask) => {
+    try {
+      const result = await pbcApi.withdrawAll(task.period_id);
+      message.success(result.message || '撤回成功');
+      fetchTasks();
+    } catch (err: any) {
+      message.error(err.response?.data?.message || '撤回失败');
+    }
+  };
+
+  const handleWithdrawSelfEval = async (task: PbcTask) => {
+    try {
+      await pbcApi.withdrawSelfEvaluation(task.period_id);
+      message.success('自评已撤回');
+      fetchTasks();
+    } catch (err: any) {
+      message.error(err.response?.data?.message || '撤回失败');
+    }
+  };
 
   const getActionButton = (task: PbcTask) => {
     const status = task.task_status || 'pending';
@@ -76,10 +102,21 @@ const PBCList: React.FC = () => {
         );
       case 'submitted':
         return (
-          <Button size="small" icon={<EyeOutlined />}
-            onClick={() => navigate(`/pbc/task/${task.task_id}`)}>
-            查看
-          </Button>
+          <Space>
+            <Button size="small" icon={<EyeOutlined />}
+              onClick={() => navigate(`/pbc/task/${task.task_id}`)}>
+              查看
+            </Button>
+            <Popconfirm
+              title="确定撤回吗？"
+              description="撤回后审批人将无法查看，可继续编辑"
+              onConfirm={() => handleWithdraw(task)}
+            >
+              <Button size="small" icon={<UndoOutlined />}>
+                撤回
+              </Button>
+            </Popconfirm>
+          </Space>
         );
       case 'approved':
         return (
@@ -87,6 +124,37 @@ const PBCList: React.FC = () => {
             onClick={() => navigate(`/pbc/task/${task.task_id}`)}>
             自评
           </Button>
+        );
+      case 'evaluating':
+        return (
+          <Space>
+            <Button size="small" icon={<EyeOutlined />}
+              onClick={() => navigate(`/pbc/task/${task.task_id}`)}>
+              查看
+            </Button>
+            <Popconfirm
+              title="确定撤回自评吗？"
+              description="撤回后可重新修改自评内容"
+              onConfirm={() => handleWithdrawSelfEval(task)}
+            >
+              <Button size="small" icon={<UndoOutlined />}>
+                撤回
+              </Button>
+            </Popconfirm>
+          </Space>
+        );
+      case 'self_eval_rejected':
+        return (
+          <Space>
+            <Button danger size="small" icon={<EditOutlined />}
+              onClick={() => navigate(`/pbc/task/${task.task_id}`)}>
+              重新自评
+            </Button>
+            <Button size="small" icon={<EyeOutlined />}
+              onClick={() => navigate(`/pbc/task/${task.task_id}`)}>
+              查看
+            </Button>
+          </Space>
         );
       case 'archived':
         return (
@@ -149,6 +217,12 @@ const PBCList: React.FC = () => {
       key: 'distributor',
       width: 120,
       render: (_, record) => record.distributor?.real_name || '-',
+    },
+    {
+      title: '审批人',
+      key: 'supervisor',
+      width: 120,
+      render: (_, record) => record.user?.supervisor?.real_name || '-',
     },
     {
       title: '下发时间',

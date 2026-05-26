@@ -48,6 +48,7 @@ interface UserPeriodGroup {
   goals: PbcGoal[];
   totalWeight: number;
   supervisorOverallScore?: number;
+  hasTask: boolean; // 标记是否有任务下发
 }
 
 const TeamGoals: React.FC = () => {
@@ -91,29 +92,34 @@ const TeamGoals: React.FC = () => {
     }
   };
 
-  const groupDataByUserAndPeriod = (goals: PbcGoal[]) => {
+  const groupDataByUserAndPeriod = (data: any[]) => {
     const groups: Map<string, UserPeriodGroup> = new Map();
     
-    goals.forEach((goal) => {
-      const key = `${goal.user_id}-${goal.period_id || 0}`;
+    data.forEach((item) => {
+      const key = `${item.user_id}-${item.period_id || 0}`;
       if (!groups.has(key)) {
-        const evaluation = (goal as any).evaluation;
+        const evaluation = item.evaluation;
+        const goals = Array.isArray(item.goals) ? item.goals : [];
         groups.set(key, {
-          userId: goal.user_id,
-          userName: goal.user?.real_name || '',
-          departmentName: goal.user?.department?.department_name || '',
-          periodId: goal.period_id || 0,
-          periodName: goal.period
-            ? `${goal.period.year}年第${goal.period.quarter}季度`
+          userId: item.user_id,
+          userName: item.user?.real_name || '',
+          departmentName: item.user?.department?.department_name || '',
+          periodId: item.period_id || 0,
+          periodName: item.period
+            ? `${item.period.year}年第${item.period.quarter}季度`
             : '未指定周期',
-          goals: [],
+          goals: goals,
           totalWeight: 0,
           supervisorOverallScore: evaluation?.supervisor_overall_score ?? undefined,
+          hasTask: true,
         });
       }
       const group = groups.get(key)!;
-      group.goals.push(goal);
-      group.totalWeight += Number(goal.goal_weight);
+      // 如果item本身是一个目标（不是空任务记录），累加权重
+      if (item.goal_id && !Array.isArray(item.goals)) {
+        group.goals.push(item);
+        group.totalWeight += Number(item.goal_weight);
+      }
     });
 
     const grouped = Array.from(groups.values());
@@ -250,7 +256,8 @@ const TeamGoals: React.FC = () => {
           const status = record.goals[0].status;
           return <Tag color={statusMap[status].color}>{statusMap[status].text}</Tag>;
         }
-        return '-';
+        // 没有目标但有任务，显示待填写
+        return <Tag color="default">待填写</Tag>;
       },
     },
     {
@@ -472,18 +479,25 @@ const TeamGoals: React.FC = () => {
           <div>
             <div style={{ marginBottom: 16, fontSize: 14, color: '#666', textAlign: 'center' }}>
               <span>目标数量：{viewDetailGroup.goals.length} 个</span>
-              <span style={{ marginLeft: 24 }}>
-                权重总和：
-                <span style={{ 
-                  color: Math.abs(viewDetailGroup.totalWeight - 100) > 0.01 ? '#ff4d4f' : '#52c41a',
-                  fontWeight: 'bold'
-                }}>
-                  {viewDetailGroup.totalWeight}%
+              {viewDetailGroup.goals.length > 0 && (
+                <span style={{ marginLeft: 24 }}>
+                  权重总和：
+                  <span style={{ 
+                    color: Math.abs(viewDetailGroup.totalWeight - 100) > 0.01 ? '#ff4d4f' : '#52c41a',
+                    fontWeight: 'bold'
+                  }}>
+                    {viewDetailGroup.totalWeight}%
+                  </span>
                 </span>
-              </span>
+              )}
             </div>
             
-            {sortGoals(viewDetailGroup.goals).map((goal, index) => (
+            {viewDetailGroup.goals.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                员工尚未填写目标
+              </div>
+            ) : (
+              sortGoals(viewDetailGroup.goals).map((goal, index) => (
               <Card
                 key={goal.goal_id}
                 size="small"
@@ -554,7 +568,8 @@ const TeamGoals: React.FC = () => {
                   )}
                 </Descriptions>
               </Card>
-            ))}
+              ))
+            )}
           </div>
         )}
       </Modal>
@@ -567,6 +582,7 @@ const TeamGoals: React.FC = () => {
           setEvaluationModalVisible(false);
           setCurrentEvaluationData(null);
         }}
+        maskClosable={false}
         footer={[
           <Button key="close" onClick={() => setEvaluationModalVisible(false)}>
             关闭

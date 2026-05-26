@@ -3,7 +3,7 @@ import request from './request';
 export type GoalType = 'business' | 'skill' | 'team';
 export type GoalNature = 'qualitative' | 'quantitative';
 export type PbcStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'archived';
-export type TaskStatus = 'pending' | 'filling' | 'submitted' | 'approved' | 'rejected' | 'archived';
+export type TaskStatus = 'pending' | 'filling' | 'submitted' | 'approved' | 'evaluating' | 'self_eval_rejected' | 'rejected' | 'archived';
 
 export interface PbcTask {
   task_id: number;
@@ -24,6 +24,10 @@ export interface PbcTask {
     department?: {
       department_id: number;
       department_name: string;
+    };
+    supervisor?: {
+      user_id: number;
+      real_name: string;
     };
   };
   distributor?: {
@@ -178,6 +182,13 @@ export const pbcApi = {
     });
   },
 
+  // 批量撤回当前周期所有已提交的目标
+  withdrawAll: (periodId?: number): Promise<any> => {
+    return request.post('/pbc/withdraw', null, {
+      params: { periodId },
+    });
+  },
+
   // 子目标
   createSubGoal: (parentId: number, params: CreatePbcParams): Promise<PbcGoal> => {
     return request.post(`/pbc/${parentId}/sub-goals`, params);
@@ -191,6 +202,11 @@ export const pbcApi = {
   // 提交整体自评
   submitSelfEvaluation: (periodId: number, overallComment: string): Promise<any> => {
     return request.post('/pbc/submit-self-evaluation', { periodId, overallComment });
+  },
+
+  // 撤回自评
+  withdrawSelfEvaluation: (periodId: number): Promise<any> => {
+    return request.post('/pbc/withdraw-self-evaluation', { periodId });
   },
 
   // 获取评价信息

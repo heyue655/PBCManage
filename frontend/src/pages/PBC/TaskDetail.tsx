@@ -6,7 +6,7 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined,
-  SendOutlined, StarOutlined, LinkOutlined,
+  SendOutlined, StarOutlined, LinkOutlined, UndoOutlined,
 } from '@ant-design/icons';
 import { pbcApi, PbcTask, PbcGoal, PbcStatus } from '../../api';
 import { useAuthStore } from '../../store/authStore';
@@ -123,6 +123,7 @@ const TaskDetail: React.FC = () => {
   const totalWeight = task?.total_weight ?? 0;
   const taskStatus = task?.task_status ?? 'pending';
   const isEditable = taskStatus === 'pending' || taskStatus === 'filling' || taskStatus === 'rejected';
+  const isSubmitted = taskStatus === 'submitted';
   const isApproved = taskStatus === 'approved';
   const isSelfSubmitted = !!evaluation?.self_submitted_at;
 
@@ -209,6 +210,16 @@ const TaskDetail: React.FC = () => {
     }
   };
 
+  const handleWithdrawAll = async () => {
+    try {
+      const result = await pbcApi.withdrawAll(task?.period_id);
+      message.success(result.message || `成功撤回 ${result.count} 个目标`);
+      fetchTask();
+    } catch (err: any) {
+      message.error(err.response?.data?.message || '撤回失败');
+    }
+  };
+
   // 批量保存所有自评
   const [evalSavingAll, setEvalSavingAll] = useState(false);
   const handleSaveAllSelfEval = async () => {
@@ -266,7 +277,7 @@ const TaskDetail: React.FC = () => {
     : '-';
 
   const allGoalsEvaluated = goals.filter(g => g.status === 'approved').every((g: any) => g.self_score);
-  const canSubmitOverallSelfEval = isApproved && allGoalsEvaluated && !isSelfSubmitted;
+  const canSubmitOverallSelfEval = (isApproved || taskStatus === 'self_eval_rejected') && allGoalsEvaluated && !isSelfSubmitted;
 
   return (
     <div style={{ padding: '0 0 40px' }}>
@@ -303,11 +314,20 @@ const TaskDetail: React.FC = () => {
             </div>
           </Col>
           <Col span={6}>
+            <div style={{ color: '#999', fontSize: 12 }}>审批人</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>
+              {task.user?.supervisor?.real_name || '-'}
+            </div>
+          </Col>
+          <Col span={6}>
             <div style={{ color: '#999', fontSize: 12 }}>下发时间</div>
             <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>
               {task.created_at ? new Date(task.created_at).toLocaleDateString('zh-CN') : '-'}
             </div>
           </Col>
+        </Row>
+
+        <Row gutter={24} style={{ marginTop: 16 }}>
           <Col span={6}>
             <div style={{ color: '#999', fontSize: 12 }}>权重总和</div>
             <div style={{ marginTop: 4 }}>
@@ -333,7 +353,7 @@ const TaskDetail: React.FC = () => {
       </Card>
 
       {/* 自评被驳回提示 */}
-      {isApproved && !isSelfSubmitted && evaluation?.self_eval_rejected_at && (
+      {(isApproved || taskStatus === 'self_eval_rejected') && !isSelfSubmitted && evaluation?.self_eval_rejected_at && (
         <Alert
           type="warning"
           showIcon
@@ -385,9 +405,11 @@ const TaskDetail: React.FC = () => {
                     <Button size="small" icon={<EditOutlined />} onClick={() => openGoalModal(goal)}>
                       编辑
                     </Button>
-                    <Popconfirm title="确定删除此目标吗？" onConfirm={() => handleDeleteGoal(goal.goal_id)}>
-                      <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
-                    </Popconfirm>
+                    {(goal.status === 'draft' || goal.status === 'rejected') && (
+                      <Popconfirm title="确定删除此目标吗？" onConfirm={() => handleDeleteGoal(goal.goal_id)}>
+                        <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                      </Popconfirm>
+                    )}
                   </Space>
                 ) : null
               }
@@ -445,7 +467,7 @@ const TaskDetail: React.FC = () => {
               </Descriptions>
 
               {/* 内联自评区域 */}
-              {isApproved && !isSelfSubmitted && goal.status === 'approved' && (
+              {(isApproved || taskStatus === 'self_eval_rejected') && !isSelfSubmitted && goal.status === 'approved' && (
                 <div style={{ display: 'flex', gap: 12, marginTop: 12, padding: '10px 12px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0', alignItems: 'flex-start' }}>
                   <div style={{ flexShrink: 0, width: 90 }}>
                     <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>自评分</div>
@@ -479,7 +501,7 @@ const TaskDetail: React.FC = () => {
         )}
 
         {/* 整体自评（内联） */}
-        {isApproved && !isSelfSubmitted && goals.some(g => g.status === 'approved') && (
+        {(isApproved || taskStatus === 'self_eval_rejected') && !isSelfSubmitted && goals.some(g => g.status === 'approved') && (
           <div style={{ marginTop: 16, padding: '12px 16px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
             <div style={{ fontWeight: 600, marginBottom: 8, color: '#1890ff', fontSize: 13 }}>
               <StarOutlined style={{ marginRight: 4 }} />
@@ -502,19 +524,39 @@ const TaskDetail: React.FC = () => {
           <div style={{ textAlign: 'right', marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
             <Space>
               {isEditable && (
+                <>
+                  {totalWeight > 100.01 && (
+                    <span style={{ color: '#ff4d4f', fontSize: 13, fontWeight: 600 }}>
+                      ⚠ 目标权重总和超过100%（当前 {totalWeight}%）
+                    </span>
+                  )}
+                  <Popconfirm
+                    title={`确定提交吗？（共 ${goals.length} 项目标，权重总和 ${totalWeight}%）`}
+                    description="提交后将发送给主管审核"
+                    onConfirm={handleSubmitAll}
+                    disabled={Math.abs(totalWeight - 100) > 0.01}
+                  >
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      disabled={Math.abs(totalWeight - 100) > 0.01}
+                      title={Math.abs(totalWeight - 100) > 0.01 ? '权重总和必须为100%' : ''}
+                    >
+                      提交审批
+                    </Button>
+                  </Popconfirm>
+                </>
+              )}
+              {isSubmitted && (
                 <Popconfirm
-                  title={`确定提交吗？（共 ${goals.length} 项目标，权重总和 ${totalWeight}%）`}
-                  description="提交后将发送给主管审核"
-                  onConfirm={handleSubmitAll}
-                  disabled={Math.abs(totalWeight - 100) > 0.01}
+                  title="确定撤回吗？"
+                  description="撤回后审批人将无法查看，可继续编辑"
+                  onConfirm={handleWithdrawAll}
                 >
                   <Button
-                    type="primary"
-                    icon={<SendOutlined />}
-                    disabled={Math.abs(totalWeight - 100) > 0.01}
-                    title={Math.abs(totalWeight - 100) > 0.01 ? '权重总和必须为100%' : ''}
+                    icon={<SendOutlined style={{ transform: 'rotate(180deg)' }} />}
                   >
-                    提交审批
+                    撤回
                   </Button>
                 </Popconfirm>
               )}
@@ -528,7 +570,7 @@ const TaskDetail: React.FC = () => {
                   保存并提交自评
                 </Button>
               )}
-              {isApproved && !isSelfSubmitted && !canSubmitOverallSelfEval && (
+              {(isApproved || taskStatus === 'self_eval_rejected') && !isSelfSubmitted && !canSubmitOverallSelfEval && (
                 <Button
                   type="primary"
                   icon={<StarOutlined />}
@@ -539,9 +581,28 @@ const TaskDetail: React.FC = () => {
                 </Button>
               )}
               {isSelfSubmitted && (
-                <Tag color="success" style={{ fontSize: 14, padding: '4px 12px' }}>
-                  ✓ 自评已提交
-                </Tag>
+                <>
+                  <Tag color="success" style={{ fontSize: 14, padding: '4px 12px' }}>
+                    ✓ 自评已提交
+                  </Tag>
+                  {!evaluation?.supervisor_submitted_at && (
+                    <Popconfirm
+                      title="确定撤回自评吗？"
+                      description="撤回后可重新修改自评内容"
+                      onConfirm={async () => {
+                        try {
+                          await pbcApi.withdrawSelfEvaluation(task!.period_id);
+                          message.success('自评已撤回');
+                          fetchTask();
+                        } catch (err: any) {
+                          message.error(err.response?.data?.message || '撤回失败');
+                        }
+                      }}
+                    >
+                      <Button size="small" icon={<UndoOutlined />}>撤回</Button>
+                    </Popconfirm>
+                  )}
+                </>
               )}
             </Space>
           </div>
@@ -584,6 +645,7 @@ const TaskDetail: React.FC = () => {
         okText="保存"
         cancelText="取消"
         width={760}
+        maskClosable={false}
       >
         <Form
           form={goalForm}
@@ -607,9 +669,11 @@ const TaskDetail: React.FC = () => {
             <Col span={12}>
               <Form.Item name="goal_type" label="目标类型" rules={[{ required: true }]}>
                 <Select placeholder="选择目标类型">
-                  {Object.entries(goalTypeMap).map(([k, v]) => (
-                    <Select.Option key={k} value={k}>{v}</Select.Option>
-                  ))}
+                  {Object.entries(goalTypeMap)
+                    .filter(([k]) => user?.role !== 'employee' || k !== 'team')
+                    .map(([k, v]) => (
+                      <Select.Option key={k} value={k}>{v}</Select.Option>
+                    ))}
                 </Select>
               </Form.Item>
             </Col>

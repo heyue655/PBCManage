@@ -46,6 +46,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
       onCancel={handleCancel}
       okText={action === 'approve' ? '确认通过' : '确认驳回'}
       okButtonProps={{ danger: action === 'reject' }}
+      maskClosable={false}
     >
       <div style={{ marginBottom: 16 }}>
         {extraInfo ? (

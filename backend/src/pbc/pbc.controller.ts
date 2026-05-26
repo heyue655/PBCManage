@@ -139,6 +139,15 @@ export class PbcController {
     return this.pbcService.submitAll(req.user.userId, periodId ? +periodId : undefined);
   }
 
+  // 批量撤回审核（撤回当前周期所有已提交的目标）
+  @Post('withdraw')
+  async withdrawAll(
+    @Request() req: any,
+    @Query('periodId') periodId?: string,
+  ) {
+    return this.pbcService.withdrawAll(req.user.userId, periodId ? +periodId : undefined);
+  }
+
   // 子目标
   @Post(':id/sub-goals')
   async createSubGoal(
@@ -174,6 +183,18 @@ export class PbcController {
       req.user.userId,
       body.periodId,
       body.overallComment,
+    );
+  }
+
+  // 撤回自评
+  @Post('withdraw-self-evaluation')
+  async withdrawSelfEvaluation(
+    @Request() req: any,
+    @Body() body: { periodId: number },
+  ) {
+    return this.pbcService.withdrawSelfEvaluation(
+      req.user.userId,
+      body.periodId,
     );
   }
 

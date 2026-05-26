@@ -311,8 +311,8 @@ export class PbcService {
       throw new ForbiddenException('无权删除他人目标');
     }
 
-    if (goal.status !== 'draft') {
-      throw new BadRequestException('只能删除草稿状态的目标');
+    if (goal.status !== 'draft' && goal.status !== 'rejected') {
+      throw new BadRequestException('只能删除草稿或已驳回状态的目标');
     }
 
     await this.prisma.pbcGoal.delete({
@@ -477,6 +477,83 @@ export class PbcService {
     };
   }
 
+  // 批量撤回当前周期所有已提交的目标
+  async withdrawAll(userId: number, periodId?: number) {
+    console.log('\n=== 批量撤回目标 ===');
+    console.log('用户ID:', userId, '周期ID:', periodId);
+
+    // 如果没有指定周期，使用当前活动周期
+    let targetPeriodId = periodId;
+    if (!targetPeriodId) {
+      const activePeriod = await this.findActivePeriod();
+      if (!activePeriod) {
+        throw new BadRequestException('没有活动周期');
+      }
+      targetPeriodId = activePeriod.period_id;
+    }
+
+    console.log('目标周期ID:', targetPeriodId);
+
+    // 查找当前周期内所有已提交状态的主目标
+    const goalsToWithdraw = await this.prisma.pbcGoal.findMany({
+      where: {
+        user_id: userId,
+        period_id: targetPeriodId,
+        parent_goal_id: null,
+        status: 'submitted',
+      },
+      include: {
+        subGoals: true,
+      },
+    });
+
+    console.log('需要撤回的目标数量:', goalsToWithdraw.length);
+
+    if (goalsToWithdraw.length === 0) {
+      console.log('❌ 没有可撤回的目标');
+      throw new BadRequestException('没有可撤回的目标');
+    }
+
+    const goalIds = goalsToWithdraw.map(g => g.goal_id);
+
+    // 批量更新主目标状态为draft
+    await this.prisma.pbcGoal.updateMany({
+      where: {
+        goal_id: { in: goalIds },
+      },
+      data: { status: 'draft' },
+    });
+
+    // 批量更新子目标状态为draft
+    const allSubGoalIds = goalsToWithdraw.flatMap(g => g.subGoals?.map(sg => sg.goal_id) || []);
+    if (allSubGoalIds.length > 0) {
+      await this.prisma.pbcGoal.updateMany({
+        where: {
+          goal_id: { in: allSubGoalIds },
+        },
+        data: { status: 'draft' },
+      });
+    }
+
+    // 删除这些目标的审批记录
+    await this.prisma.pbcApproval.deleteMany({
+      where: {
+        goal_id: { in: goalIds },
+      },
+    });
+
+    console.log('✅ 撤回成功');
+
+    return {
+      message: `成功撤回 ${goalsToWithdraw.length} 个目标`,
+      count: goalsToWithdraw.length,
+      goals: goalsToWithdraw.map(g => ({
+        goal_id: g.goal_id,
+        goal_name: g.goal_name,
+      })),
+    };
+  }
+
   async getSupervisorGoals(userId: number, periodId?: number) {
     console.log('\n=== 获取上级目标 ===');
     console.log('当前用户ID:', userId, '周期ID:', periodId);
@@ -536,10 +613,9 @@ export class PbcService {
     return goals;
   }
 
-  // 查看团队目标（按人员和季度展示所有非草稿状态的目标）
+  // 查看团队目标（基于任务下发记录，只要下发任务就能看到，即使员工未填写）
   async getTeamGoals(currentUserId: number, periodId?: number) {
     console.log('\n=== 查询团队目标 ===');
-    // console.log('当前用户ID:', currentUserId, '周期ID:', periodId);
 
     const currentUser = await this.prisma.user.findUnique({
       where: { user_id: currentUserId },
@@ -550,25 +626,20 @@ export class PbcService {
       throw new NotFoundException('当前用户不存在');
     }
 
-    // console.log('用户:', currentUser.real_name, '角色:', currentUser.role, '部门ID:', currentUser.department_id);
-
-    const where: any = {
-      parent_goal_id: null, // 只查主目标
-      status: { not: 'draft' }, // 排除草稿状态
-    };
-
+    // 构建任务查询条件
+    const taskWhere: any = {};
     if (periodId) {
-      where.period_id = periodId;
+      taskWhere.period_id = periodId;
     }
 
     // 根据角色设置权限过滤
     if (currentUser.role === 'employee') {
-      // 普通员工只能看到自己的目标
-      console.log('>> 普通员工：查看自己的目标');
-      where.user_id = currentUserId;
+      // 普通员工只能看到自己的任务
+      console.log('>> 普通员工：查看自己的任务');
+      taskWhere.user_id = currentUserId;
     } else if (currentUser.role === 'manager') {
-      // 经理只能看到本部门员工的目标（不包含子部门）
-      console.log('>> 经理：查看本部门员工的目标');
+      // 经理只能看到本部门员工的任务（不包含子部门）
+      console.log('>> 经理：查看本部门员工的任务');
       
       if (!currentUser.department_id) {
         console.log('⚠️ 用户没有所属部门，返回空');
@@ -579,7 +650,6 @@ export class PbcService {
         where: { department_id: currentUser.department_id },
         select: { user_id: true, real_name: true },
       });
-      // console.log('   本部门用户:', deptUsers.map(u => u.real_name).join(', '));
       
       const userIds = deptUsers.map(u => u.user_id);
       if (userIds.length === 0) {
@@ -587,10 +657,10 @@ export class PbcService {
         return [];
       }
       
-      where.user_id = { in: userIds };
+      taskWhere.user_id = { in: userIds };
     } else if (currentUser.role === 'assistant' || currentUser.role === 'gm') {
-      // 助理和总经理可以看到所属部门及所有子部门员工的目标
-      console.log('>> 助理/总经理：查看部门及子部门员工的目标');
+      // 助理和总经理可以看到所属部门及所有子部门员工的任务
+      console.log('>> 助理/总经理：查看部门及子部门员工的任务');
       
       if (!currentUser.department_id) {
         console.log('⚠️ 用户没有所属部门，返回空');
@@ -600,13 +670,11 @@ export class PbcService {
       const { DepartmentsService } = await import('../departments/departments.service');
       const deptService = new DepartmentsService(this.prisma);
       const departmentIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
-      // console.log('   部门ID列表（含子部门）:', departmentIds);
       
       const deptUsers = await this.prisma.user.findMany({
         where: { department_id: { in: departmentIds } },
         select: { user_id: true, real_name: true },
       });
-      // console.log('   部门用户:', deptUsers.map(u => u.real_name).join(', '));
       
       const userIds = deptUsers.map(u => u.user_id);
       if (userIds.length === 0) {
@@ -614,11 +682,12 @@ export class PbcService {
         return [];
       }
       
-      where.user_id = { in: userIds };
+      taskWhere.user_id = { in: userIds };
     }
 
-    const results = await this.prisma.pbcGoal.findMany({
-      where,
+    // 查询任务记录（只要下发任务就会显示）
+    const tasks = await this.prisma.pbcTask.findMany({
+      where: taskWhere,
       include: {
         user: {
           include: {
@@ -626,19 +695,42 @@ export class PbcService {
           },
         },
         period: true,
-        subGoals: true,
       },
-      orderBy: {
-        created_at: 'desc',
-      },
+      orderBy: [{ period: { year: 'desc' } }, { period: { quarter: 'desc' } }],
     });
 
-    // 批量查询对应的评价记录，附加到每个目标上
+    // 为每个任务查询对应的目标
+    const results = await Promise.all(
+      tasks.map(async (task) => {
+        const goals = await this.prisma.pbcGoal.findMany({
+          where: {
+            user_id: task.user_id,
+            period_id: task.period_id,
+            parent_goal_id: null,
+          },
+          include: {
+            user: {
+              include: {
+                department: true,
+              },
+            },
+            period: true,
+            subGoals: true,
+          },
+          orderBy: {
+            created_at: 'asc',
+          },
+        });
+        return { goals, task, user: task.user, period: task.period };
+      }),
+    );
+
+    // 批量查询对应的评价记录
     const userPeriodPairs = [
       ...new Map(
         results
-          .filter(g => g.period_id !== null)
-          .map(g => [`${g.user_id}_${g.period_id}`, { user_id: g.user_id, period_id: g.period_id! }]),
+          .filter(r => r.period)
+          .map(r => [`${r.user.user_id}_${r.period!.period_id}`, { user_id: r.user.user_id, period_id: r.period!.period_id }]),
       ).values(),
     ];
 
@@ -652,39 +744,62 @@ export class PbcService {
 
     const evalMap = new Map(evaluations.map(e => [`${e.user_id}_${e.period_id}`, e]));
 
-    // 获取当前用户的直接下属ID列表，用于判断是否可查看自评
+    // 获取当前用户的直接下属ID列表
     const directSubordinates = await this.prisma.user.findMany({
       where: { supervisor_id: currentUserId },
       select: { user_id: true },
     });
     const directSubIds = new Set(directSubordinates.map(s => s.user_id));
 
-    const goalsWithEval = results.map(g => {
-      const isDirectSub = directSubIds.has(g.user_id);
-      const evaluation = evalMap.get(`${g.user_id}_${g.period_id}`) ?? null;
+    // 组装返回数据
+    const goalsWithEval = results.flatMap(r => {
+      const isDirectSub = directSubIds.has(r.user.user_id);
+      const evaluation = evalMap.get(`${r.user.user_id}_${r.period!.period_id}`) ?? null;
 
       // 跨级主管：隐藏自评数据
-      if (!isDirectSub && g.user_id !== currentUserId) {
+      if (!isDirectSub && r.user.user_id !== currentUserId) {
         const maskedEval = evaluation ? {
           ...evaluation,
           self_overall_comment: null,
           self_submitted_at: null,
         } : null;
-        return {
+        return r.goals.map(g => ({
           ...g,
+          user: r.user,
+          period: r.period,
           self_score: null,
           self_comment: null,
           evaluation: maskedEval,
-        };
+          task: r.task,
+        }));
       }
 
-      return { ...g, evaluation };
+      return r.goals.map(g => ({
+        ...g,
+        user: r.user,
+        period: r.period,
+        evaluation,
+        task: r.task,
+      }));
     });
 
-    console.log('✅ 查询结果数量:', results.length);
+    // 如果没有目标但有任务，也要返回空目标数组以便显示任务
+    const emptyTasks = results
+      .filter(r => r.goals.length === 0)
+      .map(r => ({
+        user_id: r.user.user_id,
+        period_id: r.period!.period_id,
+        user: r.user,
+        period: r.period,
+        goals: [],
+        evaluation: evalMap.get(`${r.user.user_id}_${r.period!.period_id}`) ?? null,
+        task: r.task,
+      }));
+
+    console.log('✅ 查询结果数量:', goalsWithEval.length + emptyTasks.length);
     console.log('=== 查询团队目标结束 ===\n');
 
-    return goalsWithEval;
+    return [...goalsWithEval, ...emptyTasks];
   }
 
   // 子目标管理
@@ -763,6 +878,32 @@ export class PbcService {
       update: {
         self_overall_comment: overallComment,
         self_submitted_at: new Date(),
+        self_eval_rejected_at: null,
+        self_eval_reject_reason: null,
+      },
+    });
+  }
+
+  // 撤回自评
+  async withdrawSelfEvaluation(userId: number, periodId: number) {
+    const evaluation = await this.prisma.pbcEvaluation.findUnique({
+      where: { user_id_period_id: { user_id: userId, period_id: periodId } },
+    });
+
+    if (!evaluation || !evaluation.self_submitted_at) {
+      throw new BadRequestException('没有可撤回的自评');
+    }
+
+    if (evaluation.supervisor_submitted_at) {
+      throw new BadRequestException('主管已评价，无法撤回');
+    }
+
+    return this.prisma.pbcEvaluation.update({
+      where: { user_id_period_id: { user_id: userId, period_id: periodId } },
+      data: {
+        self_submitted_at: null,
+        self_eval_reject_reason: null,
+        self_eval_rejected_at: null,
       },
     });
   }
@@ -1019,7 +1160,8 @@ export class PbcService {
             [task.user.dingtalk_userid],
             {
               title: 'PBC任务下发通知',
-              text: `您已收到 ${periodName} 的PBC任务，请登录系统填写您的PBC目标。\n系统地址：https://pbc.das-security.cn`,
+              text: `您已收到 ${periodName} 的PBC任务，请登录系统填写您的PBC目标。`,
+              link: 'http://pbc.das-security.cn/pbc',
             },
           );
         }
@@ -1039,6 +1181,7 @@ export class PbcService {
       include: {
         period: true,
         distributor: { select: { user_id: true, real_name: true } },
+        user: { include: { supervisor: { select: { user_id: true, real_name: true } } } },
       },
       orderBy: [{ period: { year: 'desc' } }, { period: { quarter: 'desc' } }],
     });
@@ -1049,7 +1192,10 @@ export class PbcService {
           where: { user_id: userId, period_id: task.period_id, parent_goal_id: null },
         });
         const totalWeight = goals.reduce((s, g) => s + Number(g.goal_weight), 0);
-        const taskStatus = this.computeTaskStatus(goals);
+        const evaluation = await this.prisma.pbcEvaluation.findUnique({
+          where: { user_id_period_id: { user_id: userId, period_id: task.period_id } },
+        });
+        const taskStatus = this.computeTaskStatus(goals, evaluation);
         return { ...task, goals_count: goals.length, total_weight: totalWeight, task_status: taskStatus };
       }),
     );
@@ -1105,7 +1251,10 @@ export class PbcService {
           where: { user_id: task.user_id, period_id: task.period_id, parent_goal_id: null },
         });
         const totalWeight = goals.reduce((s, g) => s + Number(g.goal_weight), 0);
-        const taskStatus = this.computeTaskStatus(goals);
+        const evaluation = await this.prisma.pbcEvaluation.findUnique({
+          where: { user_id_period_id: { user_id: task.user_id, period_id: task.period_id } },
+        });
+        const taskStatus = this.computeTaskStatus(goals, evaluation);
         return { ...task, goals_count: goals.length, total_weight: totalWeight, task_status: taskStatus };
       }),
     );
@@ -1119,7 +1268,7 @@ export class PbcService {
       where: { task_id: taskId },
       include: {
         period: true,
-        user: { include: { department: true } },
+        user: { include: { department: true, supervisor: { select: { user_id: true, real_name: true } } } },
         distributor: { select: { user_id: true, real_name: true } },
       },
     });
@@ -1171,18 +1320,28 @@ export class PbcService {
       : null;
 
     const totalWeight = goals.reduce((s, g) => s + Number(g.goal_weight), 0);
-    const taskStatus = this.computeTaskStatus(goals);
+    const taskStatus = this.computeTaskStatus(goals, evaluation);
 
     return { ...task, goals: maskedGoals, evaluation: maskedEvaluation, total_weight: totalWeight, task_status: taskStatus };
   }
 
   /** 推导任务的整体状态（从目标状态得出） */
-  private computeTaskStatus(goals: any[]): string {
+  private computeTaskStatus(goals: any[], evaluation?: any): string {
     if (!goals || goals.length === 0) return 'pending';
     const statuses = goals.map(g => g.status as string);
     if (statuses.every(s => s === 'archived')) return 'archived';
     if (statuses.some(s => s === 'rejected')) return 'rejected';
-    if (statuses.every(s => s === 'approved' || s === 'archived')) return 'approved';
+    if (statuses.every(s => s === 'approved' || s === 'archived')) {
+      // 已提交自评、主管未评价 → 待评价
+      if (evaluation?.self_submitted_at && !evaluation?.supervisor_submitted_at) {
+        return 'evaluating';
+      }
+      // 自评被驳回 → 自评不通过
+      if (evaluation?.self_eval_rejected_at && !evaluation?.self_submitted_at) {
+        return 'self_eval_rejected';
+      }
+      return 'approved';
+    }
     if (statuses.some(s => s === 'submitted')) return 'submitted';
     return 'filling';
   }

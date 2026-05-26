@@ -146,7 +146,8 @@ export class DingtalkService {
     content: {
       title: string;
       text: string;
-    }
+      link?: string;
+    },
   ): Promise<boolean> {
     try {
       // 过滤空的userid
@@ -160,16 +161,27 @@ export class DingtalkService {
       const accessToken = await this.getAccessToken(organization);
       
       // 构造消息体
-      const message = {
+      const message: any = {
         agent_id: config.agentId,
         userid_list: validUserIds.join(','),
-        msg: {
+      };
+
+      if (content.link) {
+        message.msg = {
+          msgtype: 'markdown',
+          markdown: {
+            title: content.title,
+            text: `## PBC通知：${content.title}\n\n${content.text}\n\n[点击查看 →](${content.link})`,
+          },
+        };
+      } else {
+        message.msg = {
           msgtype: 'text',
           text: {
             content: `【PBC通知】\n${content.title}\n\n${content.text}`,
           },
-        },
-      };
+        };
+      }
 
       this.logger.log(`准备发送钉钉通知 [${organization}]`, {
         agent_id: config.agentId,
@@ -219,6 +231,7 @@ export class DingtalkService {
       {
         title: '待审核提醒',
         text: `${employeeName} 提交了 ${periodName} 的PBC目标（共${goalCount}个），请及时审核。`,
+        link: 'http://pbc.das-security.cn/review',
       }
     );
   }
@@ -231,18 +244,22 @@ export class DingtalkService {
     employeeDingtalkId: string,
     periodName: string,
     goalCount: number,
+    reviewerName?: string,
   ): Promise<boolean> {
     if (!employeeDingtalkId) {
       this.logger.warn(`员工未配置钉钉ID，跳过发送通知 [${organization}]`);
       return false;
     }
 
+    const reviewerText = reviewerName ? `审批人：${reviewerName}\n` : '';
+
     return this.sendWorkNotification(
       organization,
       [employeeDingtalkId],
       {
         title: '审核通过通知',
-        text: `您的 ${periodName} PBC目标（共${goalCount}个）已通过审核。`,
+        text: `您的 ${periodName} PBC目标（共${goalCount}个）已通过审核。\n${reviewerText}`,
+        link: 'http://pbc.das-security.cn/pbc',
       }
     );
   }
@@ -256,18 +273,22 @@ export class DingtalkService {
     periodName: string,
     goalCount: number,
     reason: string,
+    reviewerName?: string,
   ): Promise<boolean> {
     if (!employeeDingtalkId) {
       this.logger.warn(`员工未配置钉钉ID，跳过发送通知 [${organization}]`);
       return false;
     }
 
+    const reviewerText = reviewerName ? `审批人：${reviewerName}\n` : '';
+
     return this.sendWorkNotification(
       organization,
       [employeeDingtalkId],
       {
         title: '审核驳回通知',
-        text: `您的 ${periodName} PBC目标（共${goalCount}个）未通过审核。\n驳回原因：${reason}\n请修改后重新提交。`,
+        text: `您的 ${periodName} PBC目标（共${goalCount}个）未通过审核。\n驳回原因：${reason}\n${reviewerText}请修改后重新提交。`,
+        link: 'http://pbc.das-security.cn/pbc',
       }
     );
   }
@@ -291,6 +312,7 @@ export class DingtalkService {
       {
         title: '绩效结果通知',
         text: `您的 ${periodName} 绩效结果已下发，请登录系统查看主管评价与绩效等级。`,
+        link: 'http://pbc.das-security.cn/pbc',
       }
     );
   }

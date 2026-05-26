@@ -53,7 +53,7 @@ const ReviewList: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [pendingData, setPendingData] = useState<UserGoalGroup[]>([]);
-  const [historyData, setHistoryData] = useState<PbcGoal[]>([]);
+  const [historyData, setHistoryData] = useState<UserGoalGroup[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentGroup, setCurrentGroup] = useState<UserGoalGroup | null>(null);
   const [modalAction, setModalAction] = useState<'approve' | 'reject'>('approve');
@@ -110,7 +110,29 @@ const ReviewList: React.FC = () => {
   const fetchHistoryData = async () => {
     try {
       const data = await reviewsApi.getHistory();
-      setHistoryData(data);
+      
+      // 按员工和周期分组（与待审核逻辑一致）
+      const groups: Map<string, UserGoalGroup> = new Map();
+      data.forEach((goal: PbcGoal) => {
+        const key = `${goal.user_id}-${goal.period_id}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            userId: goal.user_id,
+            userName: goal.user?.real_name || '',
+            periodId: goal.period_id || 0,
+            periodName: goal.period
+              ? `${goal.period.year}年第${goal.period.quarter}季度`
+              : '',
+            goals: [],
+            totalWeight: 0,
+          });
+        }
+        const group = groups.get(key)!;
+        group.goals.push(goal);
+        group.totalWeight += Number(goal.goal_weight);
+      });
+      
+      setHistoryData(Array.from(groups.values()));
     } catch {
       // 错误已处理
     }
@@ -301,7 +323,7 @@ const ReviewList: React.FC = () => {
             icon={<CheckOutlined />}
             onClick={() => handleAction(record, 'approve')}
           >
-            批量通过
+            通过
           </Button>
           <Button
             danger
@@ -309,7 +331,7 @@ const ReviewList: React.FC = () => {
             icon={<CloseOutlined />}
             onClick={() => handleAction(record, 'reject')}
           >
-            批量驳回
+            驳回
           </Button>
         </Space>
       ),
@@ -383,48 +405,45 @@ const ReviewList: React.FC = () => {
     },
   ];
 
-  const historyColumns: ColumnsType<PbcGoal> = [
+  const historyColumns: ColumnsType<UserGoalGroup> = [
     {
       title: '员工姓名',
-      dataIndex: ['user', 'real_name'],
-      key: 'user_name',
-      width: 100,
+      dataIndex: 'userName',
+      key: 'userName',
+      width: 120,
     },
     {
-      title: '目标名称',
-      dataIndex: 'goal_name',
-      key: 'goal_name',
-      width: 200,
+      title: '周期',
+      dataIndex: 'periodName',
+      key: 'periodName',
+      width: 150,
     },
     {
-      title: '目标类型',
-      dataIndex: 'goal_type',
-      key: 'goal_type',
+      title: '目标数量',
+      key: 'goalCount',
       width: 100,
-      render: (type: string) => goalTypeMap[type] || type,
+      render: (_, record) => `${record.goals.length} 个`,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
+      title: '权重总和',
+      dataIndex: 'totalWeight',
+      key: 'totalWeight',
       width: 100,
-      render: (status: PbcStatus) => (
-        <Tag color={statusMap[status].color}>{statusMap[status].text}</Tag>
+      render: (weight) => (
+        <span style={{ color: Math.abs(weight - 100) > 0.01 ? '#ff4d4f' : '#52c41a' }}>
+          {weight}%
+        </span>
       ),
     },
     {
-      title: '自评分',
-      dataIndex: 'self_score',
-      key: 'self_score',
-      width: 80,
-      render: (score) => score ? `${score}分` : '-',
-    },
-    {
-      title: '主管评分',
-      dataIndex: 'supervisor_score',
-      key: 'supervisor_score',
+      title: '最终状态',
+      key: 'finalStatus',
       width: 100,
-      render: (score) => score ? `${score}分` : '-',
+      render: (_, record) => {
+        // 取第一个目标的状态作为代表（同一周期的目标状态应该一致）
+        const status = record.goals[0]?.status;
+        return status ? <Tag color={statusMap[status].color}>{statusMap[status].text}</Tag> : '-';
+      },
     },
     {
       title: '操作',
@@ -435,7 +454,10 @@ const ReviewList: React.FC = () => {
           type="link"
           size="small"
           icon={<EyeOutlined />}
-          onClick={() => navigate(`/review/${record.goal_id}`)}
+          onClick={() => {
+            setViewDetailGroup(record);
+            setDetailModalVisible(true);
+          }}
         >
           查看
         </Button>
@@ -478,8 +500,9 @@ const ReviewList: React.FC = () => {
         <Table
           columns={historyColumns}
           dataSource={historyData}
-          rowKey="goal_id"
+          rowKey={(record) => `${record.userId}_${record.periodId || 'no_period'}`}
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
         />
       ),
     },
@@ -536,7 +559,7 @@ const ReviewList: React.FC = () => {
                 handleAction(viewDetailGroup, 'approve');
               }}
             >
-              批量通过
+              通过
             </Button>
           ),
         ]}
@@ -634,6 +657,7 @@ const ReviewList: React.FC = () => {
           setEvalModalVisible(false);
           setCurrentEvalItem(null);
         }}
+        maskClosable={false}
         footer={[
           <Button key="close" onClick={() => setEvalModalVisible(false)}>
             关闭
@@ -833,6 +857,7 @@ const ReviewList: React.FC = () => {
           setRejectEvalTarget(null);
           setRejectEvalReason('');
         }}
+        maskClosable={false}
         okText="确认驳回"
         okButtonProps={{ danger: true }}
         cancelText="取消"

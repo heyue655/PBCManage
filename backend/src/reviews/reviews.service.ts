@@ -108,12 +108,14 @@ export class ReviewsService {
         const periodName = sampleGoal.period 
           ? `${sampleGoal.period.year}年第${sampleGoal.period.quarter}季度` 
           : '当前周期';
+        const reviewer = await this.prisma.user.findUnique({ where: { user_id: reviewerId } });
 
         await this.dingtalkService.sendApproveNotification(
           sampleGoal.user.organization || '安恒',
           sampleGoal.user.dingtalk_userid,
           periodName,
           allGoals.length,
+          reviewer?.real_name,
         );
       }
     } catch (error) {
@@ -203,6 +205,7 @@ export class ReviewsService {
         const periodName = sampleGoal.period 
           ? `${sampleGoal.period.year}年第${sampleGoal.period.quarter}季度` 
           : '当前周期';
+        const reviewer = await this.prisma.user.findUnique({ where: { user_id: reviewerId } });
 
         await this.dingtalkService.sendRejectNotification(
           sampleGoal.user.organization || '安恒',
@@ -210,6 +213,7 @@ export class ReviewsService {
           periodName,
           allGoals.length,
           rejectDto.reason,
+          reviewer?.real_name,
         );
       }
     } catch (error) {
@@ -417,6 +421,7 @@ export class ReviewsService {
           {
             title: '自评被驳回',
             text: `您 ${periodName} 的自评已被主管驳回，原因：${reason}。请修改后重新提交。`,
+            link: 'http://pbc.das-security.cn/pbc',
           },
         );
       }
