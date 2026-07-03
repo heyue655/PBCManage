@@ -193,9 +193,16 @@ const UserManage: React.FC = () => {
       render: (org) => org || '安恒',
     },
     {
-      title: '直属主管',
-      dataIndex: ['supervisor', 'real_name'],
-      key: 'supervisor',
+      title: '职能主管',
+      dataIndex: ['functionalSupervisor', 'real_name'],
+      key: 'functionalSupervisor',
+      width: 100,
+      render: (name) => name || '-',
+    },
+    {
+      title: '业务主管',
+      dataIndex: ['businessSupervisor', 'real_name'],
+      key: 'businessSupervisor',
       width: 100,
       render: (name) => name || '-',
     },
@@ -388,8 +395,17 @@ const UserManage: React.FC = () => {
               <Select.Option value="耘瓴端">耘瓴端</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="supervisor_id" label="直属主管">
-            <Select placeholder="请选择直属主管" allowClear showSearch optionFilterProp="children">
+          <Form.Item name="functional_supervisor_id" label="职能主管">
+            <Select placeholder="请选择职能主管" allowClear showSearch optionFilterProp="children">
+              {data.map((user) => (
+                <Select.Option key={user.user_id} value={user.user_id}>
+                  {user.real_name} ({user.job_title})
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="business_supervisor_id" label="业务主管">
+            <Select placeholder="请选择业务主管" allowClear showSearch optionFilterProp="children">
               {data.map((user) => (
                 <Select.Option key={user.user_id} value={user.user_id}>
                   {user.real_name} ({user.job_title})
@@ -420,7 +436,8 @@ const UserManage: React.FC = () => {
             <li>部门</li>
             <li>角色（员工/助理/经理/总经理）</li>
             <li>所属组织（安恒/耘瓴端）</li>
-            <li>直属主管（填写姓名）</li>
+            <li>职能主管（填写姓名）</li>
+            <li>业务主管（填写姓名）</li>
           </ul>
           <Button
             type="link"

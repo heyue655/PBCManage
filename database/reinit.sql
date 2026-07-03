@@ -24,9 +24,13 @@ INSERT INTO departments (department_name, parent_id) VALUES
 ('数字化研发部', 1),
 ('应用规划部', 1);
 
--- 插入用户数据（密码为123456的bcrypt加密结果）
+-- 插入用户数据
 -- 密码: 123456 -> $2a$10$tW3U7t4EH/ij9z1HYbr5FOr0JXpzwmWBhPEUjbzeW9IqUF4y2DME2
+-- 密码: admin@123 -> $2a$10$m2UEeZl5./hHtDeGhk8RG.x3o.1BmkSZ6uBUorszKJ4dvfEhRHEiW
 INSERT INTO users (username, password, real_name, job_title, department_id, supervisor_id, role) VALUES
+-- 系统管理员
+('admin', '$2a$10$m2UEeZl5./hHtDeGhk8RG.x3o.1BmkSZ6uBUorszKJ4dvfEhRHEiW', '管理员', '系统管理员', 1, NULL, 'gm'),
+
 -- 总经理
 ('zijie', '$2a$10$tW3U7t4EH/ij9z1HYbr5FOr0JXpzwmWBhPEUjbzeW9IqUF4y2DME2', '子杰', '总经理', 1, NULL, 'gm'),
 

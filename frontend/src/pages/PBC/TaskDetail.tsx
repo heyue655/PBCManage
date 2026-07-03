@@ -42,6 +42,8 @@ const taskStatusLabelMap: Record<string, { color: string; text: string }> = {
   filling: { color: 'processing', text: '填写中' },
   submitted: { color: 'blue', text: '待审核' },
   approved: { color: 'success', text: '已通过' },
+  evaluating: { color: 'orange', text: '待评价' },
+  self_eval_rejected: { color: 'error', text: '自评不通过' },
   rejected: { color: 'error', text: '已驳回' },
   archived: { color: 'purple', text: '已归档' },
 };
@@ -316,7 +318,14 @@ const TaskDetail: React.FC = () => {
           <Col span={6}>
             <div style={{ color: '#999', fontSize: 12 }}>审批人</div>
             <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>
-              {task.user?.supervisor?.real_name || '-'}
+              {(() => {
+                const func = task.user?.functionalSupervisor?.real_name;
+                const biz = task.user?.businessSupervisor?.real_name;
+                if (func && biz) return `${func} / ${biz}`;
+                if (func) return func;
+                if (biz) return biz;
+                return '-';
+              })()}
             </div>
           </Col>
           <Col span={6}>

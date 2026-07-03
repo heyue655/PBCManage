@@ -55,9 +55,10 @@ const PerformanceList: React.FC = () => {
   // 判断当前用户是否可编辑某条绩效记录
   const canEditRecord = (record: Performance): boolean => {
     if (!currentUser) return false;
-    if (currentUser.role === 'assistant') return false;
+    if (currentUser.role === 'assistant') return true;
     if (currentUser.role === 'gm' || currentUser.role === 'manager') {
-      return record.user?.supervisor_id === currentUser.user_id;
+      return record.user?.functional_supervisor_id === currentUser.user_id ||
+             record.user?.business_supervisor_id === currentUser.user_id;
     }
     return false;
   };
@@ -207,13 +208,35 @@ const PerformanceList: React.FC = () => {
       render: (_, record) => <MultilineText text={record.performance_comment} />,
     },
     {
-      title: '主管评分',
-      key: 'supervisor_overall_score',
-      width: 100,
+      title: '职能主管评分',
+      key: 'functional_overall_score',
+      width: 110,
       render: (_, record) => {
-        const score = record.evaluation?.supervisor_overall_score;
+        const score = record.evaluation?.functional_overall_score;
         return score != null ? (
-          <span style={{ fontWeight: 700, color: '#52c41a' }}>{score} 分</span>
+          <span style={{ fontWeight: 700, color: '#1890ff' }}>{score} 分</span>
+        ) : '-';
+      },
+    },
+    {
+      title: '业务主管评分',
+      key: 'business_overall_score',
+      width: 110,
+      render: (_, record) => {
+        const score = record.evaluation?.business_overall_score;
+        return score != null ? (
+          <span style={{ fontWeight: 700, color: '#722ed1' }}>{score} 分</span>
+        ) : '-';
+      },
+    },
+    {
+      title: '加权平均分',
+      key: 'avg_weighted_score',
+      width: 110,
+      render: (_, record) => {
+        const score = record.evaluation?.avg_weighted_score;
+        return score != null ? (
+          <span style={{ fontWeight: 700, color: '#52c41a', fontSize: 16 }}>{score} 分</span>
         ) : '-';
       },
     },
@@ -334,6 +357,27 @@ const PerformanceList: React.FC = () => {
         <Descriptions.Item label="季度">{`${currentRecord.period?.year}Q${currentRecord.period?.quarter}`}</Descriptions.Item>
         <Descriptions.Item label="绩效等级">
           {level ? <Tag color={levelColorMap[level] || 'default'}>{performanceLevelOptions.find(o => o.value === level)?.label || level}</Tag> : '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="职能主管评分">
+          {currentRecord.evaluation?.functional_overall_score != null ? (
+            <span style={{ fontWeight: 700, color: '#1890ff' }}>{currentRecord.evaluation.functional_overall_score} 分</span>
+          ) : '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="职能主管评价">
+          <MultilineText text={currentRecord.evaluation?.functional_overall_comment} />
+        </Descriptions.Item>
+        <Descriptions.Item label="业务主管评分">
+          {currentRecord.evaluation?.business_overall_score != null ? (
+            <span style={{ fontWeight: 700, color: '#722ed1' }}>{currentRecord.evaluation.business_overall_score} 分</span>
+          ) : '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="业务主管评价">
+          <MultilineText text={currentRecord.evaluation?.business_overall_comment} />
+        </Descriptions.Item>
+        <Descriptions.Item label="加权平均分">
+          {currentRecord.evaluation?.avg_weighted_score != null ? (
+            <span style={{ fontWeight: 700, color: '#52c41a', fontSize: 18 }}>{currentRecord.evaluation.avg_weighted_score} 分</span>
+          ) : '-'}
         </Descriptions.Item>
         <Descriptions.Item label="绩效评价"><MultilineText text={currentRecord.performance_comment} /></Descriptions.Item>
         <Descriptions.Item label="是否有AI维度的组织贡献">

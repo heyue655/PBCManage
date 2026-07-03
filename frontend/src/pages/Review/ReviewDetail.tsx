@@ -137,12 +137,14 @@ const ReviewDetail: React.FC = () => {
             <Divider>评估信息</Divider>
             <Descriptions bordered column={2}>
               <Descriptions.Item label="自评分数">{goal.self_score ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="主管评分">{goal.supervisor_score ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="职能主管评分">{goal.functional_supervisor_score ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="业务主管评分">{goal.business_supervisor_score ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="自评说明" span={2}><MultilineText text={goal.self_comment} /></Descriptions.Item>
-              <Descriptions.Item label="主管评语" span={2}><MultilineText text={goal.supervisor_comment} /></Descriptions.Item>
+              <Descriptions.Item label="职能主管评语" span={2}><MultilineText text={goal.functional_supervisor_comment} /></Descriptions.Item>
+              <Descriptions.Item label="业务主管评语" span={2}><MultilineText text={goal.business_supervisor_comment} /></Descriptions.Item>
             </Descriptions>
 
-            {!goal.supervisor_score && (
+            {(!goal.functional_supervisor_score || !goal.business_supervisor_score) && (
               <Card title="主管评估" style={{ marginTop: 16 }}>
                 <Form form={evaluateForm} layout="inline" onFinish={handleEvaluate}>
                   <Form.Item

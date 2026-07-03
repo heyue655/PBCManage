@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import MainLayout from './components/MainLayout';
@@ -16,22 +16,45 @@ import { DepartmentList } from './pages/Department';
 import DingtalkAppManage from './pages/DingtalkAppManage';
 import PerformanceList from './pages/Performance';
 import MyPerformance from './pages/MyPerformance';
+import SystemConfig from './pages/SystemConfig';
+import { request } from './api';
 
-// 路由守卫组件
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-// 角色路由守卫组件
 const RoleRoute: React.FC<{
   children: React.ReactNode;
   allowedRoles: string[];
-}> = ({ children, allowedRoles }) => {
+  allowEmployeeIfSupervisor?: boolean;
+}> = ({ children, allowedRoles, allowEmployeeIfSupervisor }) => {
   const { user } = useAuthStore();
   const userRole = user?.role || 'employee';
+  const [isSupervisor, setIsSupervisor] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  if (!allowedRoles.includes(userRole)) {
+  useEffect(() => {
+    if (allowEmployeeIfSupervisor && userRole === 'employee') {
+      request.get('/users/me/is-supervisor')
+        .then((res: any) => setIsSupervisor(res.isSupervisor))
+        .catch(() => setIsSupervisor(false))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [userRole, allowEmployeeIfSupervisor]);
+
+  if (loading) return null;
+
+  let canAccess = allowedRoles.includes(userRole);
+
+  // 如果是普通员工且允许主管访问，检查是否是主管
+  if (!canAccess && userRole === 'employee' && allowEmployeeIfSupervisor && isSupervisor) {
+    canAccess = true;
+  }
+
+  if (!canAccess) {
     return <Navigate to="/pbc" replace />;
   }
 
@@ -52,13 +75,11 @@ const App: React.FC = () => {
           }
         >
           <Route index element={<Navigate to="/pbc" replace />} />
-          {/* 我的PBC - 所有角色 */}
           <Route path="pbc" element={<PBCList />} />
           <Route path="pbc/task/:taskId" element={<TaskDetail />} />
           <Route path="pbc/create" element={<PBCForm />} />
           <Route path="pbc/edit/:id" element={<PBCForm />} />
 
-          {/* 下发任务 - 助理、总经理 */}
           <Route
             path="distribute-task"
             element={
@@ -68,7 +89,6 @@ const App: React.FC = () => {
             }
           />
           
-          {/* 团队目标 - 经理、助理、总经理 */}
           <Route
             path="team-goals"
             element={
@@ -78,11 +98,10 @@ const App: React.FC = () => {
             }
           />
           
-          {/* 审核管理 - 经理、助理、总经理 */}
           <Route
             path="review"
             element={
-              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']}>
+              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']} allowEmployeeIfSupervisor>
                 <ReviewList />
               </RoleRoute>
             }
@@ -90,13 +109,12 @@ const App: React.FC = () => {
           <Route
             path="review/:id"
             element={
-              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']}>
+              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']} allowEmployeeIfSupervisor>
                 <ReviewDetail />
               </RoleRoute>
             }
           />
           
-          {/* 人员管理 - 经理、助理、总经理 */}
           <Route
             path="users"
             element={
@@ -106,7 +124,6 @@ const App: React.FC = () => {
             }
           />
           
-          {/* 部门管理 - 助理、总经理 */}
           <Route
             path="departments"
             element={
@@ -116,20 +133,26 @@ const App: React.FC = () => {
             }
           />
           
-          {/* 我的绩效 - 所有角色 */}
           <Route path="my-performance" element={<MyPerformance />} />
 
-          {/* 绩效管理 - 经理、助理、总经理 */}
           <Route
             path="performance"
             element={
-              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']}>
+              <RoleRoute allowedRoles={['manager', 'assistant', 'gm']} allowEmployeeIfSupervisor>
                 <PerformanceList />
               </RoleRoute>
             }
           />
 
-          {/* 钉钉应用管理 - 经理、助理、总经理 */}
+          <Route
+            path="system-config"
+            element={
+              <RoleRoute allowedRoles={['gm']}>
+                <SystemConfig />
+              </RoleRoute>
+            }
+          />
+
           <Route
             path="dingtalk-apps"
             element={
@@ -139,7 +162,6 @@ const App: React.FC = () => {
             }
           />
           
-          {/* 修改密码 - 所有角色 */}
           <Route path="change-password" element={<ChangePassword />} />
         </Route>
       </Routes>

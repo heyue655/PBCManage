@@ -78,10 +78,16 @@ export class PbcGoal {
   self_comment: string;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
-  supervisor_score: number;
+  functional_supervisor_score: number;
 
   @Column({ type: 'text', nullable: true })
-  supervisor_comment: string;
+  functional_supervisor_comment: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  business_supervisor_score: number;
+
+  @Column({ type: 'text', nullable: true })
+  business_supervisor_comment: string;
 
   @CreateDateColumn()
   created_at: Date;

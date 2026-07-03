@@ -7,14 +7,19 @@ export interface User {
   job_title: string;
   role: string;
   department_id?: number;
-  supervisor_id?: number;
+  functional_supervisor_id?: number;
+  business_supervisor_id?: number;
   organization?: string;
   dingtalk_userid?: string;
   department?: {
     department_id: number;
     department_name: string;
   };
-  supervisor?: {
+  functionalSupervisor?: {
+    user_id: number;
+    real_name: string;
+  };
+  businessSupervisor?: {
     user_id: number;
     real_name: string;
   };
@@ -25,7 +30,8 @@ export interface CreateUserParams {
   real_name: string;
   job_title: string;
   department_id?: number;
-  supervisor_id?: number;
+  functional_supervisor_id?: number;
+  business_supervisor_id?: number;
   role?: string;
   organization?: string;
   dingtalk_userid?: string;

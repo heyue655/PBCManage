@@ -221,8 +221,15 @@ const PBCList: React.FC = () => {
     {
       title: '审批人',
       key: 'supervisor',
-      width: 120,
-      render: (_, record) => record.user?.supervisor?.real_name || '-',
+      width: 200,
+      render: (_, record) => {
+        const func = record.user?.functionalSupervisor?.real_name;
+        const biz = record.user?.businessSupervisor?.real_name;
+        if (func && biz) return `${func} / ${biz}`;
+        if (func) return func;
+        if (biz) return biz;
+        return '-';
+      },
     },
     {
       title: '下发时间',

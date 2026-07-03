@@ -22,31 +22,35 @@ model Department {
 }
 
 model User {
-  user_id         Int             @id @default(autoincrement())
-  username        String          @unique(map: "IDX_fe0bb3f6520ee0469504521e71") @db.VarChar(255)
-  password        String          @db.VarChar(255)
-  real_name       String          @db.VarChar(255)
-  job_title       String          @db.VarChar(255)
-  department_id   Int?
-  supervisor_id   Int?
-  role            UserRole        @default(employee)
-  organization    String          @default("安恒") @db.VarChar(50)
-  dingtalk_userid String?         @db.VarChar(255)
-  created_at      DateTime        @default(now())
-  updated_at      DateTime        @updatedAt
-  loginLogs       LoginLog[]
-  approvals       PbcApproval[]
-  evaluations     PbcEvaluation[]
-  pbcGoals        PbcGoal[]
-  performances    PbcPerformance[]
-  receivedTasks   PbcTask[]       @relation("TaskRecipient")
-  distributedTasks PbcTask[]      @relation("TaskDistributor")
-  department      Department?     @relation(fields: [department_id], references: [department_id])
-  supervisor      User?           @relation("UserSupervisor", fields: [supervisor_id], references: [user_id])
-  subordinates    User[]          @relation("UserSupervisor")
+  user_id                    Int             @id @default(autoincrement())
+  username                   String          @unique(map: "IDX_fe0bb3f6520ee0469504521e71") @db.VarChar(255)
+  password                   String          @db.VarChar(255)
+  real_name                  String          @db.VarChar(255)
+  job_title                  String          @db.VarChar(255)
+  department_id              Int?
+  functional_supervisor_id   Int?
+  business_supervisor_id     Int?
+  role                       UserRole        @default(employee)
+  organization               String          @default("安恒") @db.VarChar(50)
+  dingtalk_userid            String?         @db.VarChar(255)
+  created_at                 DateTime        @default(now())
+  updated_at                 DateTime        @updatedAt
+  loginLogs                  LoginLog[]
+  approvals                  PbcApproval[]
+  evaluations                PbcEvaluation[]
+  pbcGoals                   PbcGoal[]
+  performances               PbcPerformance[]
+  receivedTasks              PbcTask[]       @relation("TaskRecipient")
+  distributedTasks           PbcTask[]       @relation("TaskDistributor")
+  department                 Department?     @relation(fields: [department_id], references: [department_id])
+  functionalSupervisor       User?           @relation("FunctionalSupervisor", fields: [functional_supervisor_id], references: [user_id])
+  functionalSubordinates     User[]          @relation("FunctionalSupervisor")
+  businessSupervisor         User?           @relation("BusinessSupervisor", fields: [business_supervisor_id], references: [user_id])
+  businessSubordinates       User[]          @relation("BusinessSupervisor")
 
   @@index([department_id], map: "users_department_id_fkey")
-  @@index([supervisor_id], map: "users_supervisor_id_fkey")
+  @@index([functional_supervisor_id], map: "users_functional_supervisor_id_fkey")
+  @@index([business_supervisor_id], map: "users_business_supervisor_id_fkey")
   @@map("users")
 }
 
@@ -69,35 +73,37 @@ model PbcPeriod {
 }
 
 model PbcGoal {
-  goal_id            Int           @id @default(autoincrement())
-  user_id            Int
-  period_id          Int?
-  goal_type          GoalType
-  goal_nature        GoalNature    @default(qualitative)
-  goal_name          String        @db.VarChar(255)
-  goal_description   String        @db.Text
-  goal_weight        Decimal       @db.Decimal(5, 2)
-  parent_goal_id     Int?
-  supervisor_goal_id Int?
-  measures           String?       @db.Text
-  unacceptable       String?       @db.Text
-  acceptable         String?       @db.Text
-  excellent          String?       @db.Text
-  completion_time    DateTime?     @db.Date
-  status             PbcStatus     @default(draft)
-  self_score         Decimal?      @db.Decimal(5, 2)
-  self_comment       String?       @db.Text
-  supervisor_score   Decimal?      @db.Decimal(5, 2)
-  supervisor_comment String?       @db.Text
-  created_at         DateTime      @default(now())
-  updated_at         DateTime      @updatedAt
-  approvals          PbcApproval[]
-  parentGoal         PbcGoal?      @relation("GoalHierarchy", fields: [parent_goal_id], references: [goal_id], onDelete: Cascade)
-  subGoals           PbcGoal[]     @relation("GoalHierarchy")
-  period             PbcPeriod?    @relation(fields: [period_id], references: [period_id])
-  supervisorGoal     PbcGoal?      @relation("SupervisorGoal", fields: [supervisor_goal_id], references: [goal_id])
-  linkedGoals        PbcGoal[]     @relation("SupervisorGoal")
-  user               User          @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  goal_id                       Int           @id @default(autoincrement())
+  user_id                       Int
+  period_id                     Int?
+  goal_type                     GoalType
+  goal_nature                   GoalNature    @default(qualitative)
+  goal_name                     String        @db.VarChar(255)
+  goal_description              String        @db.Text
+  goal_weight                   Decimal       @db.Decimal(5, 2)
+  parent_goal_id                Int?
+  supervisor_goal_id            Int?
+  measures                      String?       @db.Text
+  unacceptable                  String?       @db.Text
+  acceptable                    String?       @db.Text
+  excellent                     String?       @db.Text
+  completion_time               DateTime?     @db.Date
+  status                        PbcStatus     @default(draft)
+  self_score                    Decimal?      @db.Decimal(5, 2)
+  self_comment                  String?       @db.Text
+  functional_supervisor_score   Decimal?      @db.Decimal(5, 2)
+  functional_supervisor_comment String?       @db.Text
+  business_supervisor_score     Decimal?      @db.Decimal(5, 2)
+  business_supervisor_comment   String?       @db.Text
+  created_at                    DateTime      @default(now())
+  updated_at                    DateTime      @updatedAt
+  approvals                     PbcApproval[]
+  parentGoal                    PbcGoal?      @relation("GoalHierarchy", fields: [parent_goal_id], references: [goal_id], onDelete: Cascade)
+  subGoals                      PbcGoal[]     @relation("GoalHierarchy")
+  period                        PbcPeriod?    @relation(fields: [period_id], references: [period_id])
+  supervisorGoal                PbcGoal?      @relation("SupervisorGoal", fields: [supervisor_goal_id], references: [goal_id])
+  linkedGoals                   PbcGoal[]     @relation("SupervisorGoal")
+  user                          User          @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
   @@index([status])
   @@index([parent_goal_id], map: "pbc_goals_parent_goal_id_fkey")
@@ -126,14 +132,15 @@ model PbcTask {
 }
 
 model PbcApproval {
-  approval_id Int            @id @default(autoincrement())
-  goal_id     Int
-  reviewer_id Int
-  action      ApprovalAction
-  comments    String?        @db.Text
-  created_at  DateTime       @default(now())
-  goal        PbcGoal        @relation(fields: [goal_id], references: [goal_id], onDelete: Cascade)
-  reviewer    User           @relation(fields: [reviewer_id], references: [user_id], onDelete: Cascade)
+  approval_id     Int            @id @default(autoincrement())
+  goal_id         Int
+  reviewer_id     Int
+  action          ApprovalAction
+  comments        String?        @db.Text
+  supervisor_type String?        @db.VarChar(20)
+  created_at      DateTime       @default(now())
+  goal            PbcGoal        @relation(fields: [goal_id], references: [goal_id], onDelete: Cascade)
+  reviewer        User           @relation(fields: [reviewer_id], references: [user_id], onDelete: Cascade)
 
   @@index([goal_id], map: "pbc_approvals_goal_id_fkey")
   @@index([reviewer_id], map: "pbc_approvals_reviewer_id_fkey")
@@ -148,9 +155,13 @@ model PbcEvaluation {
   self_submitted_at          DateTime?
   self_eval_reject_reason    String?          @db.Text
   self_eval_rejected_at      DateTime?
-  supervisor_overall_score   Int?
-  supervisor_overall_comment String?          @db.Text
-  supervisor_submitted_at    DateTime?
+  functional_overall_score   Int?
+  functional_overall_comment String?          @db.Text
+  functional_submitted_at    DateTime?
+  business_overall_score     Int?
+  business_overall_comment   String?          @db.Text
+  business_submitted_at      DateTime?
+  avg_weighted_score         Decimal?         @db.Decimal(5, 2)
   created_at                 DateTime         @default(now())
   updated_at                 DateTime         @updatedAt
   period                     PbcPeriod        @relation(fields: [period_id], references: [period_id], onDelete: Cascade)
@@ -216,6 +227,16 @@ model DingtalkApp {
   @@index([organization])
   @@index([is_active])
   @@map("dingtalk_apps")
+}
+
+model SystemConfig {
+  config_id    Int      @id @default(autoincrement())
+  config_key   String   @unique @db.VarChar(64)
+  config_value String   @db.VarChar(255)
+  description  String?  @db.VarChar(255)
+  updated_at   DateTime @default(now()) @updatedAt
+
+  @@map("system_configs")
 }
 
 enum UserRole {

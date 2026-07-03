@@ -18,7 +18,8 @@ export interface Performance {
     user_id: number;
     real_name: string;
     department_id: number | null;
-    supervisor_id: number | null;
+    functional_supervisor_id: number | null;
+    business_supervisor_id: number | null;
     department: {
       department_id: number;
       department_name: string;
@@ -31,8 +32,11 @@ export interface Performance {
   };
   evaluation: {
     evaluation_id: number;
-    supervisor_overall_comment: string | null;
-    supervisor_overall_score: number | null;
+    functional_overall_comment: string | null;
+    functional_overall_score: number | null;
+    business_overall_comment: string | null;
+    business_overall_score: number | null;
+    avg_weighted_score: number | null;
   };
 }
 
@@ -45,32 +49,26 @@ export interface UpdatePerformanceDto {
 }
 
 export const performanceApi = {
-  // 获取绩效列表
   getList: (periodId?: number): Promise<Performance[]> => {
     return request.get('/performance', { params: periodId ? { periodId } : {} });
   },
 
-  // 获取我的绩效（已下发的）
   getMine: (): Promise<Performance[]> => {
     return request.get('/performance/mine');
   },
 
-  // 获取单条绩效
   getOne: (id: number): Promise<Performance> => {
     return request.get(`/performance/${id}`);
   },
 
-  // 更新绩效
   update: (id: number, dto: UpdatePerformanceDto): Promise<Performance> => {
     return request.put(`/performance/${id}`, dto);
   },
 
-  // 下发绩效结果
   distributeResults: (performanceIds: number[]): Promise<{ count: number; message: string }> => {
     return request.post('/performance/distribute', { performanceIds });
   },
 
-  // 导出Excel
   export: (periodId?: number): Promise<void> => {
     return request
       .get('/performance/export', {

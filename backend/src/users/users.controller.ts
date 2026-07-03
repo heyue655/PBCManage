@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseI
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { UsersService } from './users.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto, UpdateUserDto } from './dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UserRole } from '../entities';
@@ -9,7 +10,10 @@ import { UserRole } from '../entities';
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  constructor(
+    private usersService: UsersService,
+    private prisma: PrismaService,
+  ) {}
 
   @Get()
   async findAll(
@@ -32,6 +36,20 @@ export class UsersController {
   @Get('me')
   async getMe(@Request() req: any) {
     return this.usersService.findOne(req.user.userId);
+  }
+
+  @Get('me/is-supervisor')
+  async isSupervisor(@Request() req: any) {
+    const subordinates = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          { functional_supervisor_id: req.user.userId },
+          { business_supervisor_id: req.user.userId },
+        ],
+      },
+      take: 1,
+    });
+    return { isSupervisor: subordinates.length > 0 };
   }
 
   @Get('hierarchy')

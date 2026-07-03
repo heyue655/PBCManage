@@ -20,7 +20,11 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsNumber()
-  supervisor_id?: number;
+  functional_supervisor_id?: number;
+
+  @IsOptional()
+  @IsNumber()
+  business_supervisor_id?: number;
 
   @IsOptional()
   @IsEnum(UserRole)

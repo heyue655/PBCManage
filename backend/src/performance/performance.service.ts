@@ -18,6 +18,8 @@ export class PerformanceService {
       where.period_id = periodId;
     }
 
+    let isBusinessSupervisorOnly = false;
+
     // 权限过滤
     if (currentUserId) {
       const currentUser = await this.prisma.user.findUnique({
@@ -26,9 +28,21 @@ export class PerformanceService {
 
       if (currentUser) {
         if (currentUser.role === 'employee') {
-          // 普通员工只能看自己的已下发绩效
-          where.user_id = currentUserId;
-          where.result_distributed_at = { not: null };
+          // 检查是否是业务主管
+          const businessSubordinates = await this.prisma.user.findMany({
+            where: { business_supervisor_id: currentUserId },
+            select: { user_id: true },
+          });
+
+          if (businessSubordinates.length > 0) {
+            // 业务主管：只看自己作为业务主管的下属
+            where.user_id = { in: businessSubordinates.map(s => s.user_id) };
+            isBusinessSupervisorOnly = true;
+          } else {
+            // 普通员工只能看自己的已下发绩效
+            where.user_id = currentUserId;
+            where.result_distributed_at = { not: null };
+          }
         } else if (currentUser.role === 'manager') {
           // 经理只能看本部门的
           if (currentUser.department_id) {
@@ -46,7 +60,7 @@ export class PerformanceService {
       }
     }
 
-    return this.prisma.pbcPerformance.findMany({
+    const performances = await this.prisma.pbcPerformance.findMany({
       where,
       include: {
         user: {
@@ -61,6 +75,20 @@ export class PerformanceService {
         { user: { real_name: 'asc' } },
       ],
     });
+
+    // 业务主管视角：隐藏职能主管的评分和评价
+    if (isBusinessSupervisorOnly) {
+      return performances.map(p => ({
+        ...p,
+        evaluation: p.evaluation ? {
+          ...p.evaluation,
+          functional_overall_score: null,
+          functional_overall_comment: null,
+        } : null,
+      }));
+    }
+
+    return performances;
   }
 
   // 查询当前用户的绩效（仅已下发的）
@@ -85,7 +113,7 @@ export class PerformanceService {
   }
 
   // 查询单条绩效
-  async getPerformance(id: number) {
+  async getPerformance(id: number, currentUserId?: number) {
     const perf = await this.prisma.pbcPerformance.findUnique({
       where: { performance_id: id },
       include: {
@@ -99,15 +127,29 @@ export class PerformanceService {
     if (!perf) {
       throw new NotFoundException('绩效记录不存在');
     }
+
+    // 业务主管视角：隐藏职能主管的评分和评价
+    if (currentUserId) {
+      const currentUser = await this.prisma.user.findUnique({
+        where: { user_id: currentUserId },
+      });
+      if (currentUser?.role === 'employee' && perf.user.business_supervisor_id === currentUserId) {
+        return {
+          ...perf,
+          evaluation: perf.evaluation ? {
+            ...perf.evaluation,
+            functional_overall_score: null,
+            functional_overall_comment: null,
+          } : null,
+        };
+      }
+    }
+
     return perf;
   }
 
-  // 更新绩效（仅总经理可编辑直接下属）
+  // 更新绩效（助理可修改绩效等级，总经理/经理/业务主管可编辑直接下属）
   async updatePerformance(id: number, dto: UpdatePerformanceDto, currentUserId: number, currentRole: string) {
-    if (currentRole === 'assistant') {
-      throw new ForbiddenException('助理仅有查看权限，不允许编辑');
-    }
-
     const perf = await this.prisma.pbcPerformance.findUnique({
       where: { performance_id: id },
       include: { user: true },
@@ -116,16 +158,20 @@ export class PerformanceService {
       throw new NotFoundException('绩效记录不存在');
     }
 
-    // 总经理只能编辑直接下属的绩效
-    if (currentRole === 'gm') {
-      if (perf.user.supervisor_id !== currentUserId) {
+    if (currentRole === 'assistant') {
+      // 助理可以修改绩效等级
+    } else if (currentRole === 'gm' || currentRole === 'manager') {
+      const isSupervisor = perf.user.functional_supervisor_id === currentUserId || perf.user.business_supervisor_id === currentUserId;
+      if (!isSupervisor) {
         throw new ForbiddenException('只能编辑直接下属的绩效');
+      }
+    } else if (currentRole === 'employee') {
+      // 业务主管（普通员工角色）可以编辑自己作为业务主管的下属绩效
+      if (perf.user.business_supervisor_id !== currentUserId) {
+        throw new ForbiddenException('只能编辑自己下属的绩效');
       }
     } else {
-      // manager 等其他角色也只能编辑直接下属
-      if (perf.user.supervisor_id !== currentUserId) {
-        throw new ForbiddenException('只能编辑直接下属的绩效');
-      }
+      throw new ForbiddenException('无权编辑绩效');
     }
 
     return this.prisma.pbcPerformance.update({
@@ -195,12 +241,30 @@ export class PerformanceService {
       where: { evaluation_id: evaluationId },
     });
 
+    // 根据加权平均分自动计算绩效等级
+    let performanceLevel: string | null = null;
+    if (evaluation?.avg_weighted_score != null) {
+      const score = Number(evaluation.avg_weighted_score);
+      if (score >= 95) {
+        performanceLevel = 'S';
+      } else if (score >= 85) {
+        performanceLevel = 'A';
+      } else if (score >= 70) {
+        performanceLevel = 'B';
+      } else if (score >= 55) {
+        performanceLevel = 'C';
+      } else {
+        performanceLevel = 'D';
+      }
+    }
+
     return this.prisma.pbcPerformance.create({
       data: {
         user_id: userId,
         period_id: periodId,
         evaluation_id: evaluationId,
-        performance_comment: evaluation?.supervisor_overall_comment || null,
+        performance_level: performanceLevel,
+        performance_comment: evaluation?.functional_overall_comment || evaluation?.business_overall_comment || null,
       },
     });
   }

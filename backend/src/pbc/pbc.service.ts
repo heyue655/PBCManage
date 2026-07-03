@@ -43,7 +43,7 @@ export class PbcService {
     // 查询用户角色和主管信息
     const user = await this.prisma.user.findUnique({
       where: { user_id: userId },
-      include: { supervisor: true },
+      include: { functionalSupervisor: true, businessSupervisor: true },
     });
 
     console.log('用户信息:', {
@@ -51,7 +51,8 @@ export class PbcService {
       username: user?.username,
       real_name: user?.real_name,
       role: user?.role,
-      supervisor_id: user?.supervisor_id,
+      functional_supervisor_id: user?.functional_supervisor_id,
+      business_supervisor_id: user?.business_supervisor_id,
     });
 
     if (!user) {
@@ -81,12 +82,12 @@ export class PbcService {
         console.log('   supervisor_goal_id:', createPbcDto.supervisor_goal_id);
 
         // 验证关联的上级目标是否存在且属于上级主管
-        if (user.supervisor_id) {
+        if (user.functional_supervisor_id) {
           console.log('   正在验证上级目标...');
           const supervisorGoal = await this.prisma.pbcGoal.findFirst({
             where: {
               goal_id: createPbcDto.supervisor_goal_id,
-              user_id: user.supervisor_id,
+              user_id: user.functional_supervisor_id,
               goal_type: 'business', // 关联上级的业务目标
               parent_goal_id: null,
             },
@@ -294,8 +295,10 @@ export class PbcService {
       updateData.status = 'draft';
       updateData.self_score = null;
       updateData.self_comment = null;
-      updateData.supervisor_score = null;
-      updateData.supervisor_comment = null;
+      updateData.functional_supervisor_score = null;
+      updateData.functional_supervisor_comment = null;
+      updateData.business_supervisor_score = null;
+      updateData.business_supervisor_comment = null;
     }
 
     return this.prisma.pbcGoal.update({
@@ -441,30 +444,35 @@ export class PbcService {
       const user = await this.prisma.user.findUnique({
         where: { user_id: userId },
         include: {
-          supervisor: true,
+          functionalSupervisor: true,
+          businessSupervisor: true,
         },
       });
 
-      if (user && user.supervisor && user.supervisor.dingtalk_userid) {
-        const period = await this.prisma.pbcPeriod.findUnique({
-          where: { period_id: targetPeriodId },
-        });
-        
-        const periodName = period 
-          ? `${period.year}年第${period.quarter}季度` 
-          : '当前周期';
+      const period = await this.prisma.pbcPeriod.findUnique({
+        where: { period_id: targetPeriodId },
+      });
+      
+      const periodName = period 
+        ? `${period.year}年第${period.quarter}季度` 
+        : '当前周期';
 
-        await this.dingtalkService.sendSubmitNotification(
-          user.supervisor.organization || '安恒',
-          user.supervisor.dingtalk_userid,
-          user.real_name,
-          periodName,
-          goalsToSubmit.length,
-        );
+      const supervisors = [user?.functionalSupervisor, user?.businessSupervisor].filter(Boolean) as any[];
+      const uniqueSupervisors = [...new Map(supervisors.map(s => [s.user_id, s])).values()];
+
+      for (const sup of uniqueSupervisors) {
+        if (sup.dingtalk_userid) {
+          await this.dingtalkService.sendSubmitNotification(
+            sup.organization || '安恒',
+            sup.dingtalk_userid,
+            user?.real_name || '',
+            periodName,
+            goalsToSubmit.length,
+          );
+        }
       }
     } catch (error) {
       console.error('发送钉钉通知失败:', error);
-      // 通知失败不影响主流程
     }
 
     return {
@@ -560,23 +568,26 @@ export class PbcService {
 
     const user = await this.prisma.user.findUnique({
       where: { user_id: userId },
-      include: { supervisor: true },
+      include: { functionalSupervisor: true, businessSupervisor: true },
     });
 
     console.log('用户信息:', {
       user_id: user?.user_id,
       real_name: user?.real_name,
-      supervisor_id: user?.supervisor_id,
-      supervisor_name: user?.supervisor?.real_name,
+      functional_supervisor_id: user?.functional_supervisor_id,
+      business_supervisor_id: user?.business_supervisor_id,
     });
 
-    if (!user || !user.supervisor_id) {
+    if (!user || (!user.functional_supervisor_id && !user.business_supervisor_id)) {
       console.log('⚠️ 用户没有上级主管，返回空');
       return [];
     }
 
+    const supervisorIds = [user.functional_supervisor_id, user.business_supervisor_id].filter(Boolean) as number[];
+    const uniqueSupervisorIds = [...new Set(supervisorIds)];
+
     const where: any = {
-      user_id: user.supervisor_id,
+      user_id: { in: uniqueSupervisorIds },
       goal_type: 'business', // 查询上级的业务目标（原"个人业务目标"）
       parent_goal_id: null,
       // 返回所有状态的目标（含草稿、待审核、已通过等）
@@ -746,7 +757,12 @@ export class PbcService {
 
     // 获取当前用户的直接下属ID列表
     const directSubordinates = await this.prisma.user.findMany({
-      where: { supervisor_id: currentUserId },
+      where: {
+        OR: [
+          { functional_supervisor_id: currentUserId },
+          { business_supervisor_id: currentUserId },
+        ],
+      },
       select: { user_id: true },
     });
     const directSubIds = new Set(directSubordinates.map(s => s.user_id));
@@ -894,7 +910,7 @@ export class PbcService {
       throw new BadRequestException('没有可撤回的自评');
     }
 
-    if (evaluation.supervisor_submitted_at) {
+    if (evaluation.functional_submitted_at || evaluation.business_submitted_at) {
       throw new BadRequestException('主管已评价，无法撤回');
     }
 
@@ -948,9 +964,9 @@ export class PbcService {
     if (requesterId && requesterId !== userId) {
       const targetUser = await this.prisma.user.findUnique({
         where: { user_id: userId },
-        select: { supervisor_id: true },
+        select: { functional_supervisor_id: true, business_supervisor_id: true },
       });
-      isDirectSupervisor = targetUser?.supervisor_id === requesterId;
+      isDirectSupervisor = targetUser?.functional_supervisor_id === requesterId || targetUser?.business_supervisor_id === requesterId;
     }
 
     // 跨级主管：隐藏自评数据
@@ -980,7 +996,6 @@ export class PbcService {
   async supervisorEvaluate(id: number, supervisorId: number, score: number, comment: string) {
     const goal = await this.findOne(id);
 
-    // 检查评价者是否是目标用户的主管
     const goalUser = await this.prisma.user.findUnique({
       where: { user_id: goal.user_id },
     });
@@ -989,7 +1004,9 @@ export class PbcService {
       throw new BadRequestException('目标用户不存在');
     }
 
-    if (goalUser.supervisor_id !== supervisorId) {
+    const isFunctional = goalUser.functional_supervisor_id === supervisorId;
+    const isBusiness = goalUser.business_supervisor_id === supervisorId;
+    if (!isFunctional && !isBusiness) {
       throw new ForbiddenException('只能评价自己下属的目标');
     }
 
@@ -997,17 +1014,22 @@ export class PbcService {
       throw new BadRequestException('只能评价已通过审核的目标');
     }
 
-    // 检查是否已提交自评
     if (!goal.self_score) {
       throw new BadRequestException('员工尚未完成自评');
     }
 
+    const updateData: any = {};
+    if (isBusiness) {
+      updateData.business_supervisor_score = score;
+      updateData.business_supervisor_comment = comment;
+    } else {
+      updateData.functional_supervisor_score = score;
+      updateData.functional_supervisor_comment = comment;
+    }
+
     return this.prisma.pbcGoal.update({
       where: { goal_id: id },
-      data: {
-        supervisor_score: score,
-        supervisor_comment: comment,
-      },
+      data: updateData,
     });
   }
 
@@ -1019,7 +1041,6 @@ export class PbcService {
     overallComment: string,
     overallScore?: number,
   ) {
-    // 检查是否已提交自评
     const evaluation = await this.prisma.pbcEvaluation.findUnique({
       where: {
         user_id_period_id: {
@@ -1033,7 +1054,23 @@ export class PbcService {
       throw new BadRequestException('员工尚未提交整体自评');
     }
 
-    // 更新整体评价记录
+    const targetUser = await this.prisma.user.findUnique({
+      where: { user_id: userId },
+    });
+
+    const isBusiness = targetUser?.business_supervisor_id === supervisorId;
+
+    const updateData: any = {};
+    if (isBusiness) {
+      updateData.business_overall_comment = overallComment;
+      updateData.business_overall_score = overallScore ?? null;
+      updateData.business_submitted_at = new Date();
+    } else {
+      updateData.functional_overall_comment = overallComment;
+      updateData.functional_overall_score = overallScore ?? null;
+      updateData.functional_submitted_at = new Date();
+    }
+
     const updatedEvaluation = await this.prisma.pbcEvaluation.update({
       where: {
         user_id_period_id: {
@@ -1041,21 +1078,49 @@ export class PbcService {
           period_id: periodId,
         },
       },
-      data: {
-        supervisor_overall_comment: overallComment,
-        supervisor_overall_score: overallScore ?? null,
-        supervisor_submitted_at: new Date(),
-      },
+      data: updateData,
     });
 
-    // 自动生成绩效记录
-    await this.performanceService.generatePerformance(
-      userId,
-      periodId,
-      updatedEvaluation.evaluation_id,
-    );
+    // 检查是否两个主管都已完成评价
+    const functionalDone = !!updatedEvaluation.functional_submitted_at;
+    const businessDone = !!updatedEvaluation.business_submitted_at;
+    const hasDual = !!targetUser?.functional_supervisor_id && !!targetUser?.business_supervisor_id
+      && targetUser.functional_supervisor_id !== targetUser.business_supervisor_id;
+
+    if (!hasDual || (functionalDone && businessDone)) {
+      const funcScore = updatedEvaluation.functional_overall_score ?? 0;
+      const bizScore = updatedEvaluation.business_overall_score ?? 0;
+      let avgScore: number;
+      if (hasDual) {
+        const weights = await this.getWeightRatio();
+        avgScore = Math.round((funcScore * weights.functional + bizScore * weights.business) / 100);
+      } else {
+        avgScore = hasDual ? Math.round((funcScore + bizScore) / 2) : (functionalDone ? funcScore : bizScore);
+      }
+
+      await this.prisma.pbcEvaluation.update({
+        where: { evaluation_id: updatedEvaluation.evaluation_id },
+        data: { avg_weighted_score: avgScore },
+      });
+
+      await this.performanceService.generatePerformance(
+        userId,
+        periodId,
+        updatedEvaluation.evaluation_id,
+      );
+    }
 
     return updatedEvaluation;
+  }
+
+  private async getWeightRatio(): Promise<{ functional: number; business: number }> {
+    try {
+      const { SystemConfigService } = await import('../system-config/system-config.service');
+      const svc = new SystemConfigService(this.prisma);
+      return svc.getWeightRatio();
+    } catch {
+      return { functional: 30, business: 70 };
+    }
   }
 
   // 获取用户的PBC统计
@@ -1181,7 +1246,7 @@ export class PbcService {
       include: {
         period: true,
         distributor: { select: { user_id: true, real_name: true } },
-        user: { include: { supervisor: { select: { user_id: true, real_name: true } } } },
+        user: { include: { functionalSupervisor: { select: { user_id: true, real_name: true } }, businessSupervisor: { select: { user_id: true, real_name: true } } } },
       },
       orderBy: [{ period: { year: 'desc' } }, { period: { quarter: 'desc' } }],
     });
@@ -1268,7 +1333,7 @@ export class PbcService {
       where: { task_id: taskId },
       include: {
         period: true,
-        user: { include: { department: true, supervisor: { select: { user_id: true, real_name: true } } } },
+        user: { include: { department: true, functionalSupervisor: { select: { user_id: true, real_name: true } }, businessSupervisor: { select: { user_id: true, real_name: true } } } },
         distributor: { select: { user_id: true, real_name: true } },
       },
     });
@@ -1303,7 +1368,7 @@ export class PbcService {
     // 员工未下发时，隐藏主管评价字段
     const maskedGoals = goals.map(g => {
       if (isEmployee && !isDistributed) {
-        return { ...g, supervisor_score: null, supervisor_comment: null };
+        return { ...g, functional_supervisor_score: null, functional_supervisor_comment: null, business_supervisor_score: null, business_supervisor_comment: null };
       }
       return g;
     });
@@ -1312,9 +1377,12 @@ export class PbcService {
       ? isEmployee && !isDistributed
         ? {
             ...evaluation,
-            supervisor_overall_comment: null,
-            supervisor_overall_score: null,
-            supervisor_submitted_at: null,
+            functional_overall_comment: null,
+            functional_overall_score: null,
+            functional_submitted_at: null,
+            business_overall_comment: null,
+            business_overall_score: null,
+            business_submitted_at: null,
           }
         : evaluation
       : null;
@@ -1332,11 +1400,9 @@ export class PbcService {
     if (statuses.every(s => s === 'archived')) return 'archived';
     if (statuses.some(s => s === 'rejected')) return 'rejected';
     if (statuses.every(s => s === 'approved' || s === 'archived')) {
-      // 已提交自评、主管未评价 → 待评价
-      if (evaluation?.self_submitted_at && !evaluation?.supervisor_submitted_at) {
+      if (evaluation?.self_submitted_at && !evaluation?.functional_submitted_at && !evaluation?.business_submitted_at) {
         return 'evaluating';
       }
-      // 自评被驳回 → 自评不通过
       if (evaluation?.self_eval_rejected_at && !evaluation?.self_submitted_at) {
         return 'self_eval_rejected';
       }

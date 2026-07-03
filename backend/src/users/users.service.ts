@@ -13,7 +13,6 @@ export class UsersService {
   ) {}
 
   async findAll(currentUserId: number, query: { departmentId?: number; role?: string; realName?: string; jobTitle?: string; organization?: string }) {
-    // 先获取当前用户信息
     const currentUser = await this.prisma.user.findUnique({
       where: { user_id: currentUserId },
       include: { department: true },
@@ -25,17 +24,13 @@ export class UsersService {
 
     const where: any = {};
     
-    // 根据角色设置权限过滤
     if (currentUser.role === 'employee') {
-      // 普通员工只能看到自己
       where.user_id = currentUserId;
     } else if (currentUser.role === 'manager') {
-      // 经理只能看到本部门的人员
       if (currentUser.department_id) {
         where.department_id = currentUser.department_id;
       }
     } else if (currentUser.role === 'assistant' || currentUser.role === 'gm') {
-      // 助理和总经理可以看到所属部门及所有子部门的人员
       if (currentUser.department_id) {
         const { DepartmentsService } = await import('../departments/departments.service');
         const deptService = new DepartmentsService(this.prisma);
@@ -44,7 +39,6 @@ export class UsersService {
       }
     }
     
-    // 额外的筛选条件
     if (query.departmentId) {
       where.department_id = query.departmentId;
     }
@@ -69,14 +63,14 @@ export class UsersService {
       where,
       include: {
         department: true,
-        supervisor: true,
+        functionalSupervisor: true,
+        businessSupervisor: true,
       },
     });
 
     return users.map(user => ({
       ...user,
       password: undefined,
-      // 标记是否可编辑（普通员工不可编辑）
       canEdit: currentUser.role !== 'employee',
     }));
   }
@@ -86,7 +80,8 @@ export class UsersService {
       where: { user_id: id },
       include: {
         department: true,
-        supervisor: true,
+        functionalSupervisor: true,
+        businessSupervisor: true,
       },
     });
 
@@ -102,7 +97,12 @@ export class UsersService {
 
   async findSubordinates(userId: number) {
     const subordinates = await this.prisma.user.findMany({
-      where: { supervisor_id: userId },
+      where: {
+        OR: [
+          { functional_supervisor_id: userId },
+          { business_supervisor_id: userId },
+        ],
+      },
       include: { department: true },
     });
 
@@ -113,7 +113,6 @@ export class UsersService {
   }
 
   async create(currentUserId: number, createUserDto: CreateUserDto) {
-    // 验证权限：普通员工不能创建用户
     const currentUser = await this.prisma.user.findUnique({
       where: { user_id: currentUserId },
     });
@@ -136,7 +135,6 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash('123456', 10);
 
-    // 根据姓名和组织自动查询钉钉userid
     let dingtalkUserId: string | null = createUserDto.dingtalk_userid || null;
     console.log('===== 创建用户 - 钉钉userid查询 =====');
     console.log('传入的dingtalk_userid:', dingtalkUserId);
@@ -159,7 +157,6 @@ export class UsersService {
           console.log('⚠️ 未找到匹配的钉钉用户，userid为空');
         }
       } catch (error) {
-        // 查询失败，userid设为null
         dingtalkUserId = null;
         console.error('❌ 查询钉钉userid失败，userid为空:', error.message);
       }
@@ -184,7 +181,6 @@ export class UsersService {
   }
 
   async update(currentUserId: number, id: number, updateUserDto: UpdateUserDto) {
-    // 验证权限：普通员工不能更新用户
     const currentUser = await this.prisma.user.findUnique({
       where: { user_id: currentUserId },
     });
@@ -205,7 +201,6 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
-    // 如果修改了用户名，检查唯一性
     if (updateUserDto.username && updateUserDto.username !== user.username) {
       const existing = await this.prisma.user.findUnique({
         where: { username: updateUserDto.username },
@@ -215,8 +210,7 @@ export class UsersService {
       }
     }
 
-    // 如果姓名或组织发生变化，重新查询钉钉userid
-    let shouldUpdateDingtalkUserId = false; // 标记是否需要更新userid字段
+    let shouldUpdateDingtalkUserId = false;
     let dingtalkUserId: string | null = updateUserDto.dingtalk_userid || null;
     const nameChanged = updateUserDto.real_name && updateUserDto.real_name !== user.real_name;
     const orgChanged = updateUserDto.organization && updateUserDto.organization !== user.organization;
@@ -235,7 +229,7 @@ export class UsersService {
       console.log('姓名或组织发生变化，需要重新查询钉钉userid');
       console.log('查询参数 - 组织:', finalOrganization, '姓名:', finalRealName);
       
-      shouldUpdateDingtalkUserId = true; // 标记需要更新
+      shouldUpdateDingtalkUserId = true;
       
       try {
         const searchResult = await this.dingtalkService.searchUserIdByName(
@@ -251,7 +245,6 @@ export class UsersService {
           console.log('⚠️ 未找到匹配的钉钉用户，将清空userid');
         }
       } catch (error) {
-        // 查询失败，清空userid
         dingtalkUserId = null;
         console.error('❌ 查询钉钉userid失败，将清空userid:', error.message);
       }
@@ -264,7 +257,6 @@ export class UsersService {
 
     const updateData: any = { ...updateUserDto };
     
-    // 如果需要更新userid字段，显式设置（即使是null也要更新）
     if (shouldUpdateDingtalkUserId) {
       updateData.dingtalk_userid = dingtalkUserId;
     }
@@ -281,7 +273,6 @@ export class UsersService {
   }
 
   async delete(currentUserId: number, id: number) {
-    // 验证权限：普通员工不能删除用户
     const currentUser = await this.prisma.user.findUnique({
       where: { user_id: currentUserId },
     });
@@ -348,22 +339,23 @@ export class UsersService {
         '部门': '技术部',
         '角色': '员工',
         '所属组织': '安恒',
-        '直属主管': '李四',
+        '职能主管': '李四',
+        '业务主管': '王五',
       },
     ];
 
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.json_to_sheet(templateData);
 
-    // 设置列宽
     sheet['!cols'] = [
-      { wch: 15 }, // 账号
-      { wch: 10 }, // 姓名
-      { wch: 15 }, // 职位
-      { wch: 15 }, // 部门
-      { wch: 10 }, // 角色
-      { wch: 10 }, // 所属组织
-      { wch: 10 }, // 直属主管
+      { wch: 15 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
     ];
 
     XLSX.utils.book_append_sheet(workbook, sheet, '人员导入模板');
@@ -402,14 +394,20 @@ export class UsersService {
           }
         }
 
-        let supervisor = null;
-        if (row['直属主管']) {
-          supervisor = await this.prisma.user.findFirst({
-            where: { real_name: row['直属主管'] },
+        let functionalSupervisor = null;
+        if (row['职能主管']) {
+          functionalSupervisor = await this.prisma.user.findFirst({
+            where: { real_name: row['职能主管'] },
           });
         }
 
-        // 优先使用显式的角色列，其次从职位推断
+        let businessSupervisor = null;
+        if (row['业务主管']) {
+          businessSupervisor = await this.prisma.user.findFirst({
+            where: { real_name: row['业务主管'] },
+          });
+        }
+
         let role = 'employee';
         if (row['角色']) {
           const roleText = row['角色'].trim();
@@ -441,7 +439,6 @@ export class UsersService {
         });
 
         if (existingUser) {
-          // 根据姓名和组织自动查询钉钉userid
           let dingtalkUserId: string | null = existingUser.dingtalk_userid;
           const nameChanged = row['姓名'] !== existingUser.real_name;
           const orgChanged = organization !== existingUser.organization;
@@ -450,7 +447,6 @@ export class UsersService {
               const searchResult = await this.dingtalkService.searchUserIdByName(organization, row['姓名']);
               dingtalkUserId = searchResult || null;
             } catch {
-              // 查询失败保留原值
             }
           }
 
@@ -460,20 +456,19 @@ export class UsersService {
               real_name: row['姓名'],
               job_title: jobTitle,
               department_id: department?.department_id || existingUser.department_id,
-              supervisor_id: supervisor?.user_id || existingUser.supervisor_id,
+              functional_supervisor_id: functionalSupervisor?.user_id || existingUser.functional_supervisor_id,
+              business_supervisor_id: businessSupervisor?.user_id || existingUser.business_supervisor_id,
               role: role as any,
               organization: organization,
               dingtalk_userid: dingtalkUserId,
             },
           });
         } else {
-          // 根据姓名和组织自动查询钉钉userid
           let dingtalkUserId: string | null = null;
           try {
             const searchResult = await this.dingtalkService.searchUserIdByName(organization, row['姓名']);
             dingtalkUserId = searchResult || null;
           } catch {
-            // 查询失败不影响导入
           }
 
           const hashedPassword = await bcrypt.hash('123456', 10);
@@ -484,7 +479,8 @@ export class UsersService {
               real_name: row['姓名'],
               job_title: jobTitle,
               department_id: department?.department_id,
-              supervisor_id: supervisor?.user_id,
+              functional_supervisor_id: functionalSupervisor?.user_id,
+              business_supervisor_id: businessSupervisor?.user_id,
               role: role as any,
               organization: organization,
               dingtalk_userid: dingtalkUserId,
@@ -523,7 +519,12 @@ export class UsersService {
 
   private async getSubordinatesRecursive(userId: number): Promise<any[]> {
     const directSubordinates = await this.prisma.user.findMany({
-      where: { supervisor_id: userId },
+      where: {
+        OR: [
+          { functional_supervisor_id: userId },
+          { business_supervisor_id: userId },
+        ],
+      },
       include: { department: true },
     });
 

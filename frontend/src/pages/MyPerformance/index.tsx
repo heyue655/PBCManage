@@ -81,10 +81,28 @@ const MyPerformance: React.FC = () => {
               setExpandedId(expanded ? record.performance_id : null),
             expandedRowRender: (record) => (
               <Descriptions column={2} size="small" bordered>
-                <Descriptions.Item label="主管整体评分">
-                  {record.evaluation?.supervisor_overall_score != null ? (
+                <Descriptions.Item label="职能主管评分">
+                  {record.evaluation?.functional_overall_score != null ? (
+                    <span style={{ fontWeight: 700, color: '#1890ff', fontSize: 16 }}>
+                      {record.evaluation.functional_overall_score} 分
+                    </span>
+                  ) : (
+                    '-'
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="业务主管评分">
+                  {record.evaluation?.business_overall_score != null ? (
+                    <span style={{ fontWeight: 700, color: '#722ed1', fontSize: 16 }}>
+                      {record.evaluation.business_overall_score} 分
+                    </span>
+                  ) : (
+                    '-'
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="加权平均分">
+                  {record.evaluation?.avg_weighted_score != null ? (
                     <span style={{ fontWeight: 700, color: '#52c41a', fontSize: 16 }}>
-                      {record.evaluation.supervisor_overall_score} 分
+                      {record.evaluation.avg_weighted_score} 分
                     </span>
                   ) : (
                     '-'
@@ -99,8 +117,11 @@ const MyPerformance: React.FC = () => {
                     '-'
                   )}
                 </Descriptions.Item>
-                <Descriptions.Item label="主管整体评价" span={2}>
-                  <MultilineText text={record.evaluation?.supervisor_overall_comment} />
+                <Descriptions.Item label="职能主管评价" span={2}>
+                  <MultilineText text={record.evaluation?.functional_overall_comment} />
+                </Descriptions.Item>
+                <Descriptions.Item label="业务主管评价" span={2}>
+                  <MultilineText text={record.evaluation?.business_overall_comment} />
                 </Descriptions.Item>
                 <Descriptions.Item label="绩效评价" span={2}>
                   <MultilineText text={record.performance_comment} />

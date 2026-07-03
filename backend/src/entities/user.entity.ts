@@ -29,7 +29,10 @@ export class User {
   department_id: number;
 
   @Column({ nullable: true })
-  supervisor_id: number;
+  functional_supervisor_id: number;
+
+  @Column({ nullable: true })
+  business_supervisor_id: number;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.EMPLOYEE })
   role: UserRole;
@@ -45,9 +48,16 @@ export class User {
   department: Department;
 
   @ManyToOne(() => User, { nullable: true })
-  @JoinColumn({ name: 'supervisor_id' })
-  supervisor: User;
+  @JoinColumn({ name: 'functional_supervisor_id' })
+  functionalSupervisor: User;
 
-  @OneToMany(() => User, user => user.supervisor)
-  subordinates: User[];
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'business_supervisor_id' })
+  businessSupervisor: User;
+
+  @OneToMany(() => User, user => user.functionalSupervisor)
+  functionalSubordinates: User[];
+
+  @OneToMany(() => User, user => user.businessSupervisor)
+  businessSubordinates: User[];
 }

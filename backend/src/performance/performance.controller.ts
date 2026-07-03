@@ -44,8 +44,8 @@ export class PerformanceController {
 
   // 获取单条绩效详情
   @Get(':id')
-  async getPerformance(@Param('id') id: string) {
-    return this.performanceService.getPerformance(+id);
+  async getPerformance(@Param('id') id: string, @Request() req: any) {
+    return this.performanceService.getPerformance(+id, req.user.userId);
   }
 
   // 更新绩效（仅总经理可编辑直接下属）

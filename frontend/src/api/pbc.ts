@@ -25,7 +25,11 @@ export interface PbcTask {
       department_id: number;
       department_name: string;
     };
-    supervisor?: {
+    functionalSupervisor?: {
+      user_id: number;
+      real_name: string;
+    };
+    businessSupervisor?: {
       user_id: number;
       real_name: string;
     };
@@ -61,8 +65,10 @@ export interface PbcGoal {
   status: PbcStatus;
   self_score?: number;
   self_comment?: string;
-  supervisor_score?: number;
-  supervisor_comment?: string;
+  functional_supervisor_score?: number;
+  functional_supervisor_comment?: string;
+  business_supervisor_score?: number;
+  business_supervisor_comment?: string;
   created_at?: string;
   updated_at?: string;
   user?: {
