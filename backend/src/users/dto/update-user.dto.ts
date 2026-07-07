@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNumber, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { UserRole } from '../../entities';
 
 export class UpdateUserDto {
@@ -15,16 +15,13 @@ export class UpdateUserDto {
   job_title?: string;
 
   @IsOptional()
-  @IsNumber()
-  department_id?: number;
+  department_id?: number | null;
 
   @IsOptional()
-  @IsNumber()
-  functional_supervisor_id?: number;
+  functional_supervisor_id?: number | null;
 
   @IsOptional()
-  @IsNumber()
-  business_supervisor_id?: number;
+  business_supervisor_id?: number | null;
 
   @IsOptional()
   @IsEnum(UserRole)

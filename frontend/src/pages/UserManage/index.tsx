@@ -112,6 +112,16 @@ const UserManage: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
+      // 将清空的主管字段从 undefined 转为 null，确保后端能正确更新
+      if (values.functional_supervisor_id === undefined) {
+        values.functional_supervisor_id = null;
+      }
+      if (values.business_supervisor_id === undefined) {
+        values.business_supervisor_id = null;
+      }
+      if (values.department_id === undefined) {
+        values.department_id = null;
+      }
       if (editingUser) {
         await usersApi.update(editingUser.user_id, values);
         message.success('更新成功');
