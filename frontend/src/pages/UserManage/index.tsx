@@ -15,6 +15,7 @@ const roleMap: Record<string, { color: string; text: string }> = {
 const UserManage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<User[]>([]);
+  const [allUsersForSelect, setAllUsersForSelect] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -44,6 +45,15 @@ const UserManage: React.FC = () => {
     }
   };
 
+  const fetchAllUsersForSelect = async () => {
+    try {
+      const users = await usersApi.getAll();
+      setAllUsersForSelect(users);
+    } catch {
+      // 错误已处理
+    }
+  };
+
   const fetchDepartments = async () => {
     try {
       const depts = await departmentsApi.getAll();
@@ -55,6 +65,7 @@ const UserManage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    fetchAllUsersForSelect();
     fetchDepartments();
   }, []);
 
@@ -71,6 +82,7 @@ const UserManage: React.FC = () => {
     try {
       const users = await usersApi.getAll();
       setData(users);
+      setAllUsersForSelect(users);
     } catch {
       // 错误已处理
     } finally {
@@ -99,6 +111,7 @@ const UserManage: React.FC = () => {
       await usersApi.delete(userId);
       message.success('删除成功');
       fetchData();
+      fetchAllUsersForSelect();
     } catch {
       // 错误已处理
     }
@@ -108,6 +121,7 @@ const UserManage: React.FC = () => {
     try {
       const result = await usersApi.resetPassword(user.user_id);
       message.success(result.message || `用户 ${user.real_name} 的密码已重置为123456`);
+      fetchAllUsersForSelect();
     } catch {
       // 错误已处理
     }
@@ -135,6 +149,7 @@ const UserManage: React.FC = () => {
       }
       setModalVisible(false);
       fetchData();
+      fetchAllUsersForSelect();
     } catch {
       // 表单验证失败或API错误
     }
@@ -157,6 +172,7 @@ const UserManage: React.FC = () => {
       setImportModalVisible(false);
       setFileList([]);
       fetchData();
+      fetchAllUsersForSelect();
     } catch {
       // 错误已处理
     } finally {
@@ -438,7 +454,7 @@ const UserManage: React.FC = () => {
           </Form.Item>
           <Form.Item name="functional_supervisor_id" label="职能主管">
             <Select placeholder="请选择职能主管" allowClear showSearch optionFilterProp="children">
-              {data.map((user) => (
+              {allUsersForSelect.map((user) => (
                 <Select.Option key={user.user_id} value={user.user_id}>
                   {user.real_name} ({user.job_title})
                 </Select.Option>
@@ -447,7 +463,7 @@ const UserManage: React.FC = () => {
           </Form.Item>
           <Form.Item name="business_supervisor_id" label="业务主管">
             <Select placeholder="请选择业务主管" allowClear showSearch optionFilterProp="children">
-              {data.map((user) => (
+              {allUsersForSelect.map((user) => (
                 <Select.Option key={user.user_id} value={user.user_id}>
                   {user.real_name} ({user.job_title})
                 </Select.Option>
