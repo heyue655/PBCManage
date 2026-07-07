@@ -14,6 +14,8 @@ export interface LoginResult {
     real_name: string;
     job_title: string;
     role: string;
+    department_id?: number;
+    managed_department_ids?: number[];
     department?: {
       department_id: number;
       department_name: string;

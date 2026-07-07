@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsNumber, IsEnum, IsArray } from 'class-validator';
 import { UserRole } from '../../entities';
 
 export class CreateUserDto {
@@ -17,6 +17,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsNumber()
   department_id?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  managed_department_ids?: number[];
 
   @IsOptional()
   @IsNumber()

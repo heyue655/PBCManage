@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Button, Tag, Tabs, Space, message, Modal, Descriptions, Divider, Input, InputNumber } from 'antd';
+import { Card, Table, Button, Tag, Tabs, Space, message, Modal, Descriptions, Divider, Input, InputNumber, Select } from 'antd';
 import { CheckOutlined, CloseOutlined, EyeOutlined, EditOutlined, StarOutlined } from '@ant-design/icons';
-import { reviewsApi, pbcApi, PbcGoal, PbcStatus } from '../../api';
+import { reviewsApi, pbcApi, PbcGoal, PbcStatus, departmentsApi, Department } from '../../api';
 import type { ColumnsType } from 'antd/es/table';
 import ReviewModal from './ReviewModal';
 import { sortGoals } from '../../utils/goalSort';
@@ -54,6 +54,8 @@ const ReviewList: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [pendingData, setPendingData] = useState<UserGoalGroup[]>([]);
   const [historyData, setHistoryData] = useState<UserGoalGroup[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<number | undefined>(undefined);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentGroup, setCurrentGroup] = useState<UserGoalGroup | null>(null);
   const [modalAction, setModalAction] = useState<'approve' | 'reject'>('approve');
@@ -62,6 +64,7 @@ const ReviewList: React.FC = () => {
 
   // 待评价相关状态
   const [pendingEvalData, setPendingEvalData] = useState<PendingEvalItem[]>([]);
+  const [filteredPendingEvalData, setFilteredPendingEvalData] = useState<PendingEvalItem[]>([]);
   const [evalModalVisible, setEvalModalVisible] = useState(false);
   const [currentEvalItem, setCurrentEvalItem] = useState<PendingEvalItem | null>(null);
   const [supervisorInputs, setSupervisorInputs] = useState<Record<number, { score?: number; comment: string }>>({});
@@ -147,11 +150,32 @@ const ReviewList: React.FC = () => {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      const data = await departmentsApi.getAll();
+      setDepartments(data);
+    } catch {
+      // 错误已处理
+    }
+  };
+
   useEffect(() => {
     fetchPendingData();
     fetchHistoryData();
     fetchPendingEvaluations();
+    fetchDepartments();
   }, []);
+
+  useEffect(() => {
+    let filtered = pendingEvalData;
+    if (selectedDepartment) {
+      const dept = departments.find(d => d.department_id === selectedDepartment);
+      if (dept) {
+        filtered = filtered.filter(item => item.user?.department?.department_name === dept.department_name);
+      }
+    }
+    setFilteredPendingEvalData(filtered);
+  }, [selectedDepartment, pendingEvalData, departments]);
 
   const handleAction = (group: UserGoalGroup, action: 'approve' | 'reject') => {
     setCurrentGroup(group);
@@ -482,15 +506,37 @@ const ReviewList: React.FC = () => {
     },
     {
       key: 'pendingEval',
-      label: `待评价 (${pendingEvalData.length}人)`,
+      label: `待评价 (${filteredPendingEvalData.length}人)`,
       children: (
-        <Table
-          columns={pendingEvalColumns}
-          dataSource={pendingEvalData}
-          rowKey="evaluation_id"
-          pagination={{ pageSize: 10 }}
-          scroll={{ x: 'max-content' }}
-        />
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <Space>
+              <span style={{ color: '#666' }}>部门筛选：</span>
+              <Select
+                style={{ width: 200 }}
+                placeholder="全部部门"
+                allowClear
+                value={selectedDepartment}
+                onChange={setSelectedDepartment}
+                showSearch
+                optionFilterProp="children"
+              >
+                {departments.map(d => (
+                  <Select.Option key={d.department_id} value={d.department_id}>
+                    {d.department_name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Space>
+          </div>
+          <Table
+            columns={pendingEvalColumns}
+            dataSource={filteredPendingEvalData}
+            rowKey="evaluation_id"
+            pagination={{ pageSize: 10 }}
+            scroll={{ x: 'max-content' }}
+          />
+        </div>
       ),
     },
     {

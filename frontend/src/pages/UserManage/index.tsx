@@ -86,7 +86,11 @@ const UserManage: React.FC = () => {
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
-    form.setFieldsValue(user);
+    form.setFieldsValue({
+      ...user,
+      functional_supervisor_id: user.functional_supervisor_id || user.functionalSupervisor?.user_id || null,
+      business_supervisor_id: user.business_supervisor_id || user.businessSupervisor?.user_id || null,
+    });
     setModalVisible(true);
   };
 
@@ -394,6 +398,33 @@ const UserManage: React.FC = () => {
               <Select.Option value="manager">经理</Select.Option>
               <Select.Option value="gm">总经理</Select.Option>
             </Select>
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.role !== currentValues.role}
+          >
+            {({ getFieldValue }) =>
+              getFieldValue('role') === 'assistant' ? (
+                <Form.Item
+                  name="managed_department_ids"
+                  label="管理部门"
+                  extra="助理可管理多个部门，不选则默认为所属部门"
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="请选择管理部门（可多选）"
+                    showSearch
+                    optionFilterProp="children"
+                  >
+                    {departments.map((dept) => (
+                      <Select.Option key={dept.department_id} value={dept.department_id}>
+                        {dept.department_name}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              ) : null
+            }
           </Form.Item>
           <Form.Item 
             name="organization" 

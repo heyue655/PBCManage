@@ -41,7 +41,10 @@ ALTER TABLE pbc_evaluations ADD COLUMN avg_weighted_score DECIMAL(5,2) NULL AFTE
 -- 5. pbc_approvals 表：新增 supervisor_type 字段
 ALTER TABLE pbc_approvals ADD COLUMN supervisor_type VARCHAR(20) DEFAULT 'functional' AFTER comments;
 
--- 6. 添加系统管理员用户 (admin / admin@123)
+-- 6. users 表：新增 managed_department_ids 字段（多部门助理支持）
+ALTER TABLE users ADD COLUMN managed_department_ids JSON NULL AFTER department_id;
+
+-- 7. 添加系统管理员用户 (admin / admin@123)
 INSERT INTO users (username, password, real_name, job_title, department_id, functional_supervisor_id, role, organization)
 VALUES (
   'admin',

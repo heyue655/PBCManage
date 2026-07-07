@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsArray, IsNumber } from 'class-validator';
 import { UserRole } from '../../entities';
 
 export class UpdateUserDto {
@@ -16,6 +16,11 @@ export class UpdateUserDto {
 
   @IsOptional()
   department_id?: number | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  managed_department_ids?: number[] | null;
 
   @IsOptional()
   functional_supervisor_id?: number | null;

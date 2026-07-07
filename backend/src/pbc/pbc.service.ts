@@ -673,14 +673,16 @@ export class PbcService {
       // 助理和总经理可以看到所属部门及所有子部门员工的任务
       console.log('>> 助理/总经理：查看部门及子部门员工的任务');
       
-      if (!currentUser.department_id) {
-        console.log('⚠️ 用户没有所属部门，返回空');
+      const { DepartmentsService } = await import('../departments/departments.service');
+      const deptService = new DepartmentsService(this.prisma);
+      const rootDeptIds = deptService.getManagedDepartmentIds(currentUser);
+      
+      if (rootDeptIds.length === 0) {
+        console.log('⚠️ 用户没有管理部门，返回空');
         return [];
       }
 
-      const { DepartmentsService } = await import('../departments/departments.service');
-      const deptService = new DepartmentsService(this.prisma);
-      const departmentIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
+      const departmentIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
       
       const deptUsers = await this.prisma.user.findMany({
         where: { department_id: { in: departmentIds } },
@@ -1289,10 +1291,11 @@ export class PbcService {
       });
       where.user_id = { in: deptUsers.map(u => u.user_id) };
     } else {
-      if (!currentUser.department_id) return [];
       const { DepartmentsService } = await import('../departments/departments.service');
       const deptService = new DepartmentsService(this.prisma);
-      const deptIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
+      const rootDeptIds = deptService.getManagedDepartmentIds(currentUser);
+      if (rootDeptIds.length === 0) return [];
+      const deptIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
       const deptUsers = await this.prisma.user.findMany({
         where: { department_id: { in: deptIds } },
         select: { user_id: true },

@@ -50,10 +50,11 @@ export class PerformanceService {
           }
         } else if (currentUser.role === 'assistant' || currentUser.role === 'gm') {
           // 助理和总经理可以看所属部门及所有子部门
-          if (currentUser.department_id) {
-            const { DepartmentsService } = await import('../departments/departments.service');
-            const deptService = new DepartmentsService(this.prisma);
-            const departmentIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
+          const { DepartmentsService } = await import('../departments/departments.service');
+          const deptService = new DepartmentsService(this.prisma);
+          const rootDeptIds = deptService.getManagedDepartmentIds(currentUser);
+          if (rootDeptIds.length > 0) {
+            const departmentIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
             where.user = { department_id: { in: departmentIds } };
           }
         }

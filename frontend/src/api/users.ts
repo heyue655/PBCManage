@@ -7,6 +7,7 @@ export interface User {
   job_title: string;
   role: string;
   department_id?: number;
+  managed_department_ids?: number[];
   functional_supervisor_id?: number;
   business_supervisor_id?: number;
   organization?: string;
@@ -30,6 +31,7 @@ export interface CreateUserParams {
   real_name: string;
   job_title: string;
   department_id?: number;
+  managed_department_ids?: number[];
   functional_supervisor_id?: number;
   business_supervisor_id?: number;
   role?: string;

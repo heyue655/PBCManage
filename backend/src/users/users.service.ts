@@ -31,10 +31,11 @@ export class UsersService {
         where.department_id = currentUser.department_id;
       }
     } else if (currentUser.role === 'assistant' || currentUser.role === 'gm') {
-      if (currentUser.department_id) {
-        const { DepartmentsService } = await import('../departments/departments.service');
-        const deptService = new DepartmentsService(this.prisma);
-        const departmentIds = await deptService.getAllSubDepartmentIds(currentUser.department_id);
+      const { DepartmentsService } = await import('../departments/departments.service');
+      const deptService = new DepartmentsService(this.prisma);
+      const rootDeptIds = deptService.getManagedDepartmentIds(currentUser);
+      if (rootDeptIds.length > 0) {
+        const departmentIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
         where.department_id = { in: departmentIds };
       }
     }

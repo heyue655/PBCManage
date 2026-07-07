@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Select, Space, Tag, Input, DatePicker, Switch, message, Button, Modal, Descriptions, Popconfirm } from 'antd';
 import { DownloadOutlined, SendOutlined } from '@ant-design/icons';
-import { performanceApi, Performance, UpdatePerformanceDto, pbcApi } from '../../api';
+import { performanceApi, Performance, UpdatePerformanceDto, pbcApi, departmentsApi, Department } from '../../api';
 import { useAuthStore } from '../../store/authStore';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -40,8 +40,11 @@ const levelColorMap: Record<string, string> = {
 const PerformanceList: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Performance[]>([]);
+  const [filteredData, setFilteredData] = useState<Performance[]>([]);
   const [periods, setPeriods] = useState<PeriodOption[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | undefined>(undefined);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | undefined>(undefined);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<Performance | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -81,6 +84,15 @@ const PerformanceList: React.FC = () => {
     }
   }, []);
 
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const list = await departmentsApi.getAll();
+      setDepartments(list);
+    } catch {
+      // handled
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -95,13 +107,22 @@ const PerformanceList: React.FC = () => {
 
   useEffect(() => {
     fetchPeriods();
-  }, [fetchPeriods]);
+    fetchDepartments();
+  }, [fetchPeriods, fetchDepartments]);
 
   useEffect(() => {
     if (selectedPeriodId !== undefined) {
       fetchData();
     }
   }, [selectedPeriodId, fetchData]);
+
+  useEffect(() => {
+    let filtered = data;
+    if (selectedDepartmentId) {
+      filtered = filtered.filter(item => item.user?.department?.department_id === selectedDepartmentId);
+    }
+    setFilteredData(filtered);
+  }, [selectedDepartmentId, data]);
 
   const handleView = (record: Performance) => {
     setCurrentRecord(record);
@@ -417,6 +438,20 @@ const PerformanceList: React.FC = () => {
                 label: `${p.year}年 Q${p.quarter}`,
               }))}
           />
+          <span>部门筛选：</span>
+          <Select
+            style={{ width: 160 }}
+            value={selectedDepartmentId}
+            onChange={setSelectedDepartmentId}
+            placeholder="全部部门"
+            allowClear
+            showSearch
+            optionFilterProp="children"
+            options={departments.map(d => ({
+              value: d.department_id,
+              label: d.department_name,
+            }))}
+          />
           <Button
             icon={<DownloadOutlined />}
             loading={exporting}
@@ -449,7 +484,7 @@ const PerformanceList: React.FC = () => {
       <Table
         rowKey="performance_id"
         columns={columns}
-        dataSource={data}
+        dataSource={filteredData}
         loading={loading}
         scroll={{ x: 1250 }}
         pagination={{ pageSize: 20 }}

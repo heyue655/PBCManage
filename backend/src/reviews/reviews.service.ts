@@ -442,7 +442,20 @@ export class ReviewsService {
     const isBusinessSupervisor = targetUser.business_supervisor_id === reviewerId;
 
     if (!isFunctionalSupervisor && !isBusinessSupervisor) {
-      if (reviewer.role !== 'assistant' || reviewer.department_id !== targetUser.department_id) {
+      if (reviewer.role === 'assistant') {
+        // 助理可以审核其管理部门内的员工
+        const { DepartmentsService } = await import('../departments/departments.service');
+        const deptService = new DepartmentsService(this.prisma);
+        const rootDeptIds = deptService.getManagedDepartmentIds(reviewer);
+        if (rootDeptIds.length > 0) {
+          const deptIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
+          if (!deptIds.includes(targetUser.department_id || 0)) {
+            throw new ForbiddenException('无权审核此目标');
+          }
+        } else {
+          throw new ForbiddenException('无权审核此目标');
+        }
+      } else {
         throw new ForbiddenException('无权审核此目标');
       }
     }

@@ -3,7 +3,7 @@ import {
   Card, Select, Button, Table, Checkbox, message, Tag, Space, Result, Alert,
 } from 'antd';
 import { SendOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { pbcApi, PbcPeriod } from '../../api';
+import { pbcApi, PbcPeriod, departmentsApi, Department } from '../../api';
 import { usersApi, User } from '../../api/users';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -16,21 +16,43 @@ const roleMap: Record<string, { color: string; text: string }> = {
 
 const DistributeTask: React.FC = () => {
   const [periods, setPeriods] = useState<PbcPeriod[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<number | undefined>();
+  const [selectedDepartment, setSelectedDepartment] = useState<number | undefined>();
   const [users, setUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [distributing, setDistributing] = useState(false);
   const [result, setResult] = useState<{ success: number; errors: number } | null>(null);
 
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const data = await usersApi.getAll();
+      const filtered = data.filter(u => u.role !== 'gm');
+      setAllUsers(filtered);
+      setUsers(filtered);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     pbcApi.getPeriods().then(setPeriods).catch(() => {});
-    setLoading(true);
-    usersApi.getAll()
-      .then(data => setUsers(data.filter(u => u.role !== 'gm'))) // gm通常管理自己
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    departmentsApi.getAll().then(setDepartments).catch(() => {});
+    fetchUsers();
   }, []);
+
+  useEffect(() => {
+    let filtered = allUsers;
+    if (selectedDepartment) {
+      filtered = filtered.filter(u => u.department_id === selectedDepartment);
+    }
+    setUsers(filtered);
+    setSelectedUserIds([]);
+  }, [selectedDepartment, allUsers]);
 
   const handleDistribute = async () => {
     if (!selectedPeriod) {
@@ -138,6 +160,22 @@ const DistributeTask: React.FC = () => {
                 <Select.Option key={p.period_id} value={p.period_id}>
                   {p.year}年 Q{p.quarter}
                   {p.status === 'active' && <Tag color="green" style={{ marginLeft: 6 }}>当前</Tag>}
+                </Select.Option>
+              ))}
+            </Select>
+            <span style={{ color: '#666', marginLeft: 16 }}>部门筛选：</span>
+            <Select
+              style={{ width: 200 }}
+              placeholder="全部部门"
+              allowClear
+              value={selectedDepartment}
+              onChange={setSelectedDepartment}
+              showSearch
+              optionFilterProp="children"
+            >
+              {departments.map(d => (
+                <Select.Option key={d.department_id} value={d.department_id}>
+                  {d.department_name}
                 </Select.Option>
               ))}
             </Select>

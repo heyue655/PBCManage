@@ -28,6 +28,7 @@ model User {
   real_name                  String          @db.VarChar(255)
   job_title                  String          @db.VarChar(255)
   department_id              Int?
+  managed_department_ids     Json?
   functional_supervisor_id   Int?
   business_supervisor_id     Int?
   role                       UserRole        @default(employee)
