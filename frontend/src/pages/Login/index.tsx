@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Card, message, Modal } from 'antd';
+import { Form, Input, Button, Card, message, Modal, Divider } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { authApi } from '../../api';
 import { useAuthStore } from '../../store/authStore';
@@ -9,9 +9,30 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [daslinkEnabled, setDaslinkEnabled] = useState(false);
+  const [daslinkLoading, setDaslinkLoading] = useState(false);
   const [resetForm] = Form.useForm();
   const navigate = useNavigate();
   const { login } = useAuthStore();
+
+  useEffect(() => {
+    authApi.daslinkStatus()
+      .then((res) => setDaslinkEnabled(res.enabled))
+      .catch(() => setDaslinkEnabled(false));
+  }, []);
+
+  const handleDaslinkLogin = async () => {
+    setDaslinkLoading(true);
+    try {
+      const callbackUrl = `${window.location.origin}/transit`;
+      const { url } = await authApi.daslinkLoginUrl(callbackUrl);
+      window.location.href = url;
+    } catch (error) {
+      message.error('DASLink 登录初始化失败');
+    } finally {
+      setDaslinkLoading(false);
+    }
+  };
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -105,6 +126,20 @@ const Login: React.FC = () => {
             </Button>
           </Form.Item>
         </Form>
+        {daslinkEnabled && (
+          <>
+            <Divider plain style={{ color: '#999', fontSize: 12 }}>或</Divider>
+            <Button
+              block
+              size="large"
+              loading={daslinkLoading}
+              onClick={handleDaslinkLogin}
+              style={{ marginBottom: 16 }}
+            >
+              使用 DASLink 登录
+            </Button>
+          </>
+        )}
         <div style={{ textAlign: 'center', color: '#999', fontSize: 12 }}>
           默认密码：123456
         </div>

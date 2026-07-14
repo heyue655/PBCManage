@@ -38,5 +38,11 @@
     "@types/node": "^20.10.0",
     "@types/passport-jwt": "^4.0.0",
     "typescript": "^5.3.2"
+  },
+  "allowScripts": {
+    "@nestjs/core@10.4.22": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true
   }
 }

@@ -1,6 +1,19 @@
 import axios from 'axios';
+import CryptoJS from 'crypto-js';
 import { message } from 'antd';
 import { useAuthStore } from '../store/authStore';
+
+// Sign configuration from environment variables
+const SIGN_KEY = process.env.REACT_APP_SIGN_KEY || '';
+const SIGN_ENABLED = process.env.REACT_APP_SIGN_ENABLED === 'true';
+
+// Paths that skip sign verification (must match backend whitelist)
+const SIGN_WHITELIST = [
+  '/auth/login',
+  '/auth/daslink/login-url',
+  '/auth/daslink/callback',
+  '/auth/daslink/status',
+];
 
 // 动态获取后端地址，支持localhost和局域网IP访问
 const getBaseURL = () => {
@@ -42,6 +55,26 @@ request.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Add sign headers if enabled
+    if (SIGN_ENABLED && SIGN_KEY) {
+      const url = config.url || '';
+      const isWhitelisted = SIGN_WHITELIST.some((w) => url.startsWith(w));
+
+      if (!isWhitelisted && config.method?.toUpperCase() !== 'OPTIONS') {
+        const timestamp = Date.now().toString();
+        const baseURL = config.baseURL || '';
+        const uri = url.startsWith('http')
+          ? new URL(url).pathname
+          : `${baseURL}${url}`;
+        const signStr = `${uri}${timestamp}${SIGN_KEY}${token || ''}`;
+        const sign = CryptoJS.MD5(signStr).toString().toUpperCase();
+
+        config.headers['timestamp'] = timestamp;
+        config.headers['sign'] = sign;
+      }
+    }
+
     return config;
   },
   (error) => {
@@ -58,7 +91,7 @@ request.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response;
       const requestUrl = error.config?.url || '';
-      const isLoginRequest = requestUrl.includes('/auth/login');
+      const isLoginRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/daslink/callback');
       
       if (status === 401) {
         if (isLoginRequest) {

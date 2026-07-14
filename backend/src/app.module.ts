@@ -8,6 +8,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { DingtalkAppModule } from './dingtalk-app/dingtalk-app.module';
 import { PerformanceModule } from './performance/performance.module';
 import { SystemConfigModule } from './system-config/system-config.module';
+import { DaslinkModule } from './daslink/daslink.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SystemConfigModule } from './system-config/system-config.module';
     DingtalkAppModule,
     PerformanceModule,
     SystemConfigModule,
+    DaslinkModule,
   ],
 })
 export class AppModule {}

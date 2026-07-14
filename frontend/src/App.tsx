@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import MainLayout from './components/MainLayout';
 import Login from './pages/Login';
+import AuthCallback from './pages/AuthCallback';
 import PBCList from './pages/PBC/PBCList';
 import PBCForm from './pages/PBC/PBCForm';
 import TaskDetail from './pages/PBC/TaskDetail';
@@ -66,6 +67,8 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/transfer" element={<AuthCallback />} />
+        <Route path="/transit" element={<AuthCallback />} />
         <Route
           path="/"
           element={

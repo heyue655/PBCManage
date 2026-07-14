@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { DaslinkModule } from '../daslink/daslink.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { JwtStrategy } from './jwt.strategy';
       secret: 'pbc-manage-secret-key', // 生产环境应使用环境变量
       signOptions: { expiresIn: '8h' },
     }),
+    DaslinkModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

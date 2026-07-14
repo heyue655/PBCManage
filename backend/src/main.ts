@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { SignMiddleware } from './common/middleware/sign.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -64,7 +65,11 @@ async function bootstrap() {
   
   // 设置全局前缀
   app.setGlobalPrefix('api');
-  
+
+  // 注册签名验证中间件（通过 SIGN_ENABLED 环境变量控制）
+  const signMiddleware = new SignMiddleware();
+  app.use((req: any, res: any, next: any) => signMiddleware.use(req, res, next));
+
   await app.listen(3001);
   console.log('PBC管理系统后端运行在 http://localhost:3001');
 }

@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { DaslinkService } from '../daslink/daslink.service';
 import { LoginDto, ChangePasswordDto } from './dto';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private daslinkService: DaslinkService,
   ) {}
 
   async login(loginDto: LoginDto, ipAddress?: string) {
@@ -110,6 +112,78 @@ export class AuthService {
     });
 
     return { message: '密码修改成功' };
+  }
+
+  async daslinkLogin(code: string, ipAddress?: string) {
+    // 1. Exchange code for accessToken
+    let tokenData;
+    try {
+      tokenData = await this.daslinkService.exchangeCode(code);
+    } catch (err: any) {
+      throw new UnauthorizedException(
+        `DASLink 授权码验证失败：${err.message || '授权码已过期或无效，请重新登录'}`,
+      );
+    }
+
+    // 2. Get user info from DASLink
+    let daslinkUser;
+    try {
+      daslinkUser = await this.daslinkService.getUserInfo(tokenData.accessToken);
+    } catch (err: any) {
+      throw new UnauthorizedException(
+        `DASLink 获取用户信息失败：${err.message || '请重新登录'}`,
+      );
+    }
+
+    // 3. Match local user by userCode (= username in PBC)
+    const user = await this.prisma.user.findUnique({
+      where: { username: daslinkUser.code },
+      include: { department: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(
+        `用户 ${daslinkUser.userName}(${daslinkUser.code}) 未在系统中注册，请联系管理员`,
+      );
+    }
+
+    // 4. Update dingtalk_userid if DASLink returned one and local is empty
+    if (daslinkUser.dingtalkId && !user.dingtalk_userid) {
+      await this.prisma.user.update({
+        where: { user_id: user.user_id },
+        data: { dingtalk_userid: daslinkUser.dingtalkId },
+      });
+    }
+
+    // 5. Record login log
+    await this.prisma.loginLog.create({
+      data: {
+        user_id: user.user_id,
+        login_time: new Date(),
+        ip_address: ipAddress,
+      },
+    });
+
+    // 6. Generate JWT (same as regular login)
+    const payload = {
+      userId: user.user_id,
+      username: user.username,
+      role: user.role,
+    };
+    const token = this.jwtService.sign(payload);
+
+    return {
+      access_token: token,
+      needResetPassword: false,
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        real_name: user.real_name,
+        job_title: user.job_title,
+        role: user.role,
+        department: user.department,
+      },
+    };
   }
 
   async validateUser(userId: number) {

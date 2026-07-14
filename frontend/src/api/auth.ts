@@ -40,4 +40,16 @@ export const authApi = {
   changePassword: (params: ChangePasswordParams): Promise<{ message: string }> => {
     return request.post('/auth/change-password', params);
   },
+
+  daslinkStatus: (): Promise<{ enabled: boolean }> => {
+    return request.get('/auth/daslink/status');
+  },
+
+  daslinkLoginUrl: (callbackUrl: string): Promise<{ url: string }> => {
+    return request.get(`/auth/daslink/login-url?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+  },
+
+  daslinkCallback: (code: string): Promise<LoginResult> => {
+    return request.get(`/auth/daslink/callback?code=${code}`);
+  },
 };
