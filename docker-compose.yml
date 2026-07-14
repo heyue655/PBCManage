@@ -46,6 +46,10 @@ services:
       NODE_ENV: production
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-pbc_manage}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://pbc.das-security.cn}
+      DASLINK_ENABLED: ${DASLINK_ENABLED:-false}
+      DASLINK_HOST: ${DASLINK_HOST:-}
+      DASLINK_APP_ID: ${DASLINK_APP_ID:-}
+      DASLINK_APP_SECRET: ${DASLINK_APP_SECRET:-}
     networks:
       - pbcmanage-network
     # 后端仅对内部网络暴露，不直接对外（通过 Nginx 代理）
