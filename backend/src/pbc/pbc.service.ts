@@ -643,60 +643,52 @@ export class PbcService {
       taskWhere.period_id = periodId;
     }
 
-    // 根据角色设置权限过滤
-    if (currentUser.role === 'employee') {
-      // 普通员工只能看到自己的任务
-      console.log('>> 普通员工：查看自己的任务');
-      taskWhere.user_id = currentUserId;
-    } else if (currentUser.role === 'manager') {
-      // 经理只能看到本部门员工的任务（不包含子部门）
-      console.log('>> 经理：查看本部门员工的任务');
-      
-      if (!currentUser.department_id) {
-        console.log('⚠️ 用户没有所属部门，返回空');
-        return [];
-      }
+    const userIds = new Set<number>();
 
-      const deptUsers = await this.prisma.user.findMany({
-        where: { department_id: currentUser.department_id },
-        select: { user_id: true, real_name: true },
-      });
-      
-      const userIds = deptUsers.map(u => u.user_id);
-      if (userIds.length === 0) {
-        console.log('⚠️ 部门没有用户，返回空');
-        return [];
+    if (currentUser.role === 'employee') {
+      console.log('>> 普通员工：查看自己的任务 + 作为主管的下属任务');
+      userIds.add(currentUserId);
+    } else if (currentUser.role === 'manager') {
+      console.log('>> 经理：查看本部门员工 + 作为主管的下属任务');
+      if (currentUser.department_id) {
+        const deptUsers = await this.prisma.user.findMany({
+          where: { department_id: currentUser.department_id },
+          select: { user_id: true },
+        });
+        deptUsers.forEach(u => userIds.add(u.user_id));
       }
-      
-      taskWhere.user_id = { in: userIds };
     } else if (currentUser.role === 'assistant' || currentUser.role === 'gm') {
-      // 助理和总经理可以看到所属部门及所有子部门员工的任务
-      console.log('>> 助理/总经理：查看部门及子部门员工的任务');
-      
+      console.log('>> 助理/总经理：查看部门及子部门员工 + 作为主管的下属任务');
       const { DepartmentsService } = await import('../departments/departments.service');
       const deptService = new DepartmentsService(this.prisma);
       const rootDeptIds = deptService.getManagedDepartmentIds(currentUser);
-      
-      if (rootDeptIds.length === 0) {
-        console.log('⚠️ 用户没有管理部门，返回空');
-        return [];
+      if (rootDeptIds.length > 0) {
+        const departmentIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
+        const deptUsers = await this.prisma.user.findMany({
+          where: { department_id: { in: departmentIds } },
+          select: { user_id: true },
+        });
+        deptUsers.forEach(u => userIds.add(u.user_id));
       }
-
-      const departmentIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
-      
-      const deptUsers = await this.prisma.user.findMany({
-        where: { department_id: { in: departmentIds } },
-        select: { user_id: true, real_name: true },
-      });
-      
-      const userIds = deptUsers.map(u => u.user_id);
-      if (userIds.length === 0) {
-        console.log('⚠️ 部门没有用户，返回空');
-        return [];
-      }
-      
-      taskWhere.user_id = { in: userIds };
     }
+
+    const supervisorSubordinates = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          { functional_supervisor_id: currentUserId },
+          { business_supervisor_id: currentUserId },
+        ],
+      },
+      select: { user_id: true },
+    });
+    supervisorSubordinates.forEach(u => userIds.add(u.user_id));
+
+    if (userIds.size === 0) {
+      console.log('⚠️ 没有可访问的用户，返回空');
+      return [];
+    }
+
+    taskWhere.user_id = { in: Array.from(userIds) };
 
     // 查询任务记录（只要下发任务就会显示）
     const tasks = await this.prisma.pbcTask.findMany({

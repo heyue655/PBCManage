@@ -324,7 +324,15 @@ export class ReviewsService {
   }
 
   async getSubordinatesHistory(supervisorId: number, query: { year?: number; quarter?: number }) {
-    const allSubordinateIds = await this.getAllSubordinateIds(supervisorId);
+    const directSubordinates = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          { functional_supervisor_id: supervisorId },
+          { business_supervisor_id: supervisorId },
+        ],
+      },
+    });
+    const allSubordinateIds = directSubordinates.map(s => s.user_id);
     if (allSubordinateIds.length === 0) return [];
 
     const where: any = { user_id: { in: allSubordinateIds }, parent_goal_id: null };
@@ -461,21 +469,4 @@ export class ReviewsService {
     }
   }
 
-  private async getAllSubordinateIds(userId: number): Promise<number[]> {
-    const directSubordinates = await this.prisma.user.findMany({
-      where: {
-        OR: [
-          { functional_supervisor_id: userId },
-          { business_supervisor_id: userId },
-        ],
-      },
-    });
-
-    let allIds = directSubordinates.map(s => s.user_id);
-    for (const sub of directSubordinates) {
-      const subIds = await this.getAllSubordinateIds(sub.user_id);
-      allIds = allIds.concat(subIds);
-    }
-    return allIds;
-  }
 }

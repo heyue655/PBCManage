@@ -27,36 +27,82 @@ export class PerformanceService {
       });
 
       if (currentUser) {
+        const userIds = new Set<number>();
+
         if (currentUser.role === 'employee') {
-          // 检查是否是业务主管
-          const businessSubordinates = await this.prisma.user.findMany({
-            where: { business_supervisor_id: currentUserId },
-            select: { user_id: true },
+          // 检查是否是业务主管或职能主管
+          const supervisorSubordinates = await this.prisma.user.findMany({
+            where: {
+              OR: [
+                { functional_supervisor_id: currentUserId },
+                { business_supervisor_id: currentUserId },
+              ],
+            },
+            select: { user_id: true, business_supervisor_id: true, functional_supervisor_id: true },
           });
 
-          if (businessSubordinates.length > 0) {
-            // 业务主管：只看自己作为业务主管的下属
-            where.user_id = { in: businessSubordinates.map(s => s.user_id) };
-            isBusinessSupervisorOnly = true;
+          if (supervisorSubordinates.length > 0) {
+            // 主管：看自己 + 作为主管的下属
+            userIds.add(currentUserId);
+            supervisorSubordinates.forEach(u => userIds.add(u.user_id));
+            // 检查是否只是业务主管（用于数据脱敏）：所有下属的业务主管是当前用户，且职能主管不是当前用户
+            const isBusinessOnly = supervisorSubordinates.every(
+              u => u.business_supervisor_id === currentUserId && u.functional_supervisor_id !== currentUserId
+            );
+            if (isBusinessOnly) {
+              isBusinessSupervisorOnly = true;
+            }
           } else {
             // 普通员工只能看自己的已下发绩效
-            where.user_id = currentUserId;
+            userIds.add(currentUserId);
             where.result_distributed_at = { not: null };
           }
         } else if (currentUser.role === 'manager') {
-          // 经理只能看本部门的
+          // 经理：本部门 + 作为主管的下属
           if (currentUser.department_id) {
-            where.user = { department_id: currentUser.department_id };
+            const deptUsers = await this.prisma.user.findMany({
+              where: { department_id: currentUser.department_id },
+              select: { user_id: true },
+            });
+            deptUsers.forEach(u => userIds.add(u.user_id));
           }
+          const supervisorSubordinates = await this.prisma.user.findMany({
+            where: {
+              OR: [
+                { functional_supervisor_id: currentUserId },
+                { business_supervisor_id: currentUserId },
+              ],
+            },
+            select: { user_id: true },
+          });
+          supervisorSubordinates.forEach(u => userIds.add(u.user_id));
         } else if (currentUser.role === 'assistant' || currentUser.role === 'gm') {
-          // 助理和总经理可以看所属部门及所有子部门
+          // 助理和总经理：部门及子部门 + 作为主管的下属
           const { DepartmentsService } = await import('../departments/departments.service');
           const deptService = new DepartmentsService(this.prisma);
           const rootDeptIds = deptService.getManagedDepartmentIds(currentUser);
           if (rootDeptIds.length > 0) {
             const departmentIds = await deptService.getAllSubDepartmentIds(rootDeptIds);
-            where.user = { department_id: { in: departmentIds } };
+            const deptUsers = await this.prisma.user.findMany({
+              where: { department_id: { in: departmentIds } },
+              select: { user_id: true },
+            });
+            deptUsers.forEach(u => userIds.add(u.user_id));
           }
+          const supervisorSubordinates = await this.prisma.user.findMany({
+            where: {
+              OR: [
+                { functional_supervisor_id: currentUserId },
+                { business_supervisor_id: currentUserId },
+              ],
+            },
+            select: { user_id: true },
+          });
+          supervisorSubordinates.forEach(u => userIds.add(u.user_id));
+        }
+
+        if (userIds.size > 0) {
+          where.user_id = { in: Array.from(userIds) };
         }
       }
     }
